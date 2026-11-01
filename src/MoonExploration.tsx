@@ -66,6 +66,7 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
   const roverSpeed = useRef(0);
   const roverSteerAngle = useRef(0);
   const roverWheelSpin = useRef(0);
+  const lastHud = useRef({ canEnterRover: false, canEnterRocket: false, speed: 0 });
 
   const lunarTerrainGeom = useMemo(() => {
     const geom = new THREE.PlaneGeometry(640, 640, 80, 80);
@@ -167,13 +168,21 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
       astronautQuat.current.copy(roverQuat.current);
     }
 
-    onUpdateHUD({
-      astronautPos: astroPos.clone(),
-      roverPos: rovPos.clone(),
-      canEnterRover,
-      canEnterRocket,
-      roverSpeed: Math.round(Math.abs(roverSpeed.current) * 3.6),
-    });
+    const speedKmh = Math.round(Math.abs(roverSpeed.current) * 3.6);
+    if (
+      lastHud.current.canEnterRover !== canEnterRover ||
+      lastHud.current.canEnterRocket !== canEnterRocket ||
+      lastHud.current.speed !== speedKmh
+    ) {
+      lastHud.current = { canEnterRover, canEnterRocket, speed: speedKmh };
+      onUpdateHUD({
+        astronautPos: astroPos,
+        roverPos: rovPos,
+        canEnterRover,
+        canEnterRocket,
+        roverSpeed: speedKmh,
+      });
+    }
   });
 
   return (

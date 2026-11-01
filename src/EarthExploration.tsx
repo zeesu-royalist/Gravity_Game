@@ -2,12 +2,12 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Astronaut } from './Astronaut';
-import { LunarRover } from './LunarRover';
+import { StormchaserCar } from './StormchaserCar';
 import { getCurvedEarthY } from './RealisticLandscape';
 import { CosmodromeScientists } from './Scientists';
 
 // Placed further back behind the rocket on the launch apron
-export const EARTH_CAR_DEFAULT_POS = new THREE.Vector3(0, 0.35, -24.0);
+export const EARTH_CAR_DEFAULT_POS = new THREE.Vector3(0, 0.26, -24.0);
 export const EARTH_ASTRONAUT_DEFAULT_POS = new THREE.Vector3(0, 0.26, -6.0);
 
 
@@ -61,6 +61,7 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
   const carSpeed = useRef(0);
   const carSteerAngle = useRef(0);
   const carWheelSpin = useRef(0);
+  const lastHud = useRef({ canEnterRover: false, canEnterRocket: false, speed: 0 });
 
   useFrame((_, delta) => {
     if (!isActive) return;
@@ -131,19 +132,28 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
       astronautQuat.current.copy(carQuat.current);
     }
 
-    onUpdateHUD({
-      astronautPos: astroPos.clone(),
-      roverPos: carPos.clone(),
-      canEnterRover: canEnterCar,
-      canEnterRocket,
-      roverSpeed: Math.round(Math.abs(carSpeed.current) * 3.6),
-    });
+    const speedKmh = Math.round(Math.abs(carSpeed.current) * 3.6);
+    if (
+      lastHud.current.canEnterRover !== canEnterCar ||
+      lastHud.current.canEnterRocket !== canEnterRocket ||
+      lastHud.current.speed !== speedKmh
+    ) {
+      lastHud.current = { canEnterRover: canEnterCar, canEnterRocket, speed: speedKmh };
+      onUpdateHUD({
+        astronautPos: astroPos,
+        roverPos: carPos,
+        canEnterRover: canEnterCar,
+        canEnterRocket,
+        roverSpeed: speedKmh,
+      });
+    }
   });
 
   return (
     <group>
       <CosmodromeScientists astronautPosRef={astronautPosRef} />
-      {(playerMode === 'ASTRONAUT' || playerMode === 'ROVER') && (
+      {/* 2. Astronaut (Only visible when walking on foot) */}
+      {playerMode === 'ASTRONAUT' && (
         <Astronaut
           position={astronautPosRef.current}
           rotationY={astronautRotY.current}
@@ -153,14 +163,11 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
           visible={true}
         />
       )}
-      <LunarRover
+      {/* 3. Lynx Stormchaser EX2 Car on Earth */}
+      <StormchaserCar
         position={carPosRef.current}
         rotationY={carRotY.current}
         quaternion={carQuat.current}
-        steerAngle={carSteerAngle.current}
-        wheelSpin={carWheelSpin.current}
-        isDriven={playerMode === 'ROVER'}
-        theme="EARTH"
       />
     </group>
   );

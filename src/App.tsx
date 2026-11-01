@@ -299,7 +299,7 @@ export default function App() {
               'bg-cyan-950/80 text-cyan-300 border-cyan-400'
             }`}>
               {playerMode === 'ASTRONAUT' ? (isAtMoon ? '🧑‍🚀 ASTRONAUT EVA ON MOON' : '🧑‍🚀 COMMANDER EVA ON EARTH') :
-               playerMode === 'ROVER' ? (isAtMoon ? '🏎️ DRIVING LUNAR ROVER' : '🏎️ DRIVING COSMODROME CAR') :
+               playerMode === 'ROVER' ? (isAtMoon ? '🏎️ DRIVING LUNAR ROVER' : '🚙 DRIVING LYNX STORMCHASER') :
                autopilot ? '🤖 AUTOPILOT ACTIVE' : '🚀 ROCKET FLIGHT'}
             </span>
           </div>
@@ -372,7 +372,7 @@ export default function App() {
 
         {playerMode === 'ASTRONAUT' && hudState.canEnterRover && (
           <button onClick={handleInteraction} className="bg-amber-950/95 backdrop-blur-md px-6 py-3 rounded-2xl border-2 border-amber-400 text-amber-300 font-bold font-mono text-sm shadow-2xl animate-bounce cursor-pointer flex items-center gap-2">
-            <span>🏎️</span><span>PRESS [ E ] TO DRIVE {isAtMoon ? 'LUNAR ROVER' : 'COSMODROME CAR'}</span>
+            <span>🚙</span><span>PRESS [ E ] TO DRIVE {isAtMoon ? 'LUNAR ROVER' : 'LYNX STORMCHASER'}</span>
           </button>
         )}
         {playerMode === 'ASTRONAUT' && hudState.canEnterRocket && (
@@ -434,7 +434,7 @@ export default function App() {
       <div className="absolute bottom-6 right-6 z-10 flex items-center gap-3">
         {playerMode === 'ROVER' && (
           <button onClick={handleInteraction} className="px-5 py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-amber-300 shadow-xl cursor-pointer">
-            🚪 EXIT {isAtMoon ? 'ROVER' : 'CAR'} [Press E]
+            🚪 EXIT {isAtMoon ? 'ROVER' : 'STORMCHASER'} [Press E]
           </button>
         )}
 

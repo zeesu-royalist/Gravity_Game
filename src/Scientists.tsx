@@ -28,7 +28,7 @@ export const SCIENTISTS_DATA: ScientistData[] = [
     id: 'transport',
     name: 'Eng. Marcus Vance',
     role: 'Ground Transport Lead',
-    quote: 'Cosmodrome Car is charged and ready for inspection drive!',
+    quote: 'Lynx Stormchaser EX2 is all-wheel drive ready for cosmodrome patrol!',
     position: [3.5, 0.26, -24.0],
     rotationY: -1.4,
     accessory: 'TABLET',
