@@ -38,12 +38,18 @@ function UniversalThirdPersonCamera({
     const controls = controlsRef.current;
     if (!controls) return;
     const target = playerMode === 'ROCKET'
-      ? new THREE.Vector3(rocketPos.x, rocketPos.y + 13.5, rocketPos.z)
+      ? new THREE.Vector3(rocketPos.x, Math.max(0.2, rocketPos.y) + 13.5, rocketPos.z)
       : playerMode === 'ASTRONAUT'
       ? new THREE.Vector3(astronautPos.x, astronautPos.y + 1.2, astronautPos.z)
       : new THREE.Vector3(roverPos.x, roverPos.y + 1.2, roverPos.z);
 
     camera.position.add(new THREE.Vector3().subVectors(target, prevTarget.current));
+
+    // Prevent camera from ever going below Earth ground surface
+    if (rocketPos.y < 200 && camera.position.y < 1.0) {
+      camera.position.y = 1.0;
+    }
+
     controls.target.copy(target);
     prevTarget.current.copy(target);
     controls.update();
@@ -208,8 +214,8 @@ export default function App() {
         const vel = velRef.current;
         const isMoon = destination === 'MOON';
         const targetPad = isMoon ? MOON_LANDING_SITE : EARTH_LANDING_SITE;
-        const approachPoint = isMoon ? MOON_APPROACH_POINT : EARTH_APPROACH_POINT;
-        const altAbovePad = isMoon ? pos.y - MOON_LANDING_SITE.y : pos.y - EARTH_LANDING_SITE.y;
+        const targetY = targetPad.y;
+        const altAbovePad = pos.y - targetY;
         const hDistToPad = Math.hypot(pos.x - targetPad.x, pos.z - targetPad.z);
 
         const landRocket = (pad: THREE.Vector3, nextDest: 'MOON' | 'EARTH') => {
@@ -226,24 +232,38 @@ export default function App() {
         let rcsPitch = 0, rcsYaw = 0;
 
         if (autopilot) {
-          if (altAbovePad <= 0.5 && hDistToPad <= 8.0) {
+          // 1. TOUCHDOWN CHECK (within 0.8m above pad and 24m horizontal radius)
+          if (altAbovePad <= 0.8 && hDistToPad <= 24.0) {
             landRocket(targetPad, isMoon ? 'EARTH' : 'MOON');
-          } else if (hDistToPad < 65 && altAbovePad < 220) {
+          }
+          // 2. TERMINAL VERTICAL POWERED RETRO-DESCENT
+          else if (altAbovePad < 250 && hDistToPad < 140) {
             quatRef.current.slerp(new THREE.Quaternion(), delta * 4.5);
-            pos.x = THREE.MathUtils.lerp(pos.x, targetPad.x, delta * 3.0);
-            pos.z = THREE.MathUtils.lerp(pos.z, targetPad.z, delta * 3.0);
-            const descentSpeed = Math.max(1.6, Math.min(30, altAbovePad * 0.38));
-            pos.y -= descentSpeed * delta;
+            pos.x = THREE.MathUtils.lerp(pos.x, targetPad.x, delta * 3.5);
+            pos.z = THREE.MathUtils.lerp(pos.z, targetPad.z, delta * 3.5);
+            const descentSpeed = Math.max(1.5, Math.min(26, altAbovePad * 0.35));
+            pos.y = Math.max(targetY, pos.y - descentSpeed * delta);
             vel.set(0, -descentSpeed, 0);
-          } else {
-            const toWaypoint = new THREE.Vector3().subVectors(approachPoint, pos);
+          }
+          // 3. INTERPLANETARY TRANSIT & AIRSPACE CORRIDOR
+          else {
+            // Intelligent corridor waypoint: for Earth return, align above cosmodrome corridor (Y = 600) first
+            const approachWaypoint = isMoon
+              ? MOON_APPROACH_POINT
+              : (pos.y > 800 ? new THREE.Vector3(0, 600, 0) : new THREE.Vector3(0, 200, 0));
+
+            const toWaypoint = new THREE.Vector3().subVectors(approachWaypoint, pos);
             const dist = toWaypoint.length();
-            const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), toWaypoint.clone().normalize());
+            const targetQuat = new THREE.Quaternion().setFromUnitVectors(
+              new THREE.Vector3(0, 1, 0),
+              toWaypoint.clone().normalize()
+            );
             quatRef.current.slerp(targetQuat, delta * 3.5);
 
             const fwd = new THREE.Vector3(0, 1, 0).applyQuaternion(quatRef.current);
-            const speed = dist > 2500 ? 1400 : Math.max(65, dist * 0.55);
-            vel.lerp(fwd.multiplyScalar(speed), delta * 2.8);
+            // Cruise fast in deep space, decelerate as approaching planet
+            const cruiseSpeed = dist > 2500 ? 1400 : Math.max(50, dist * 0.45);
+            vel.lerp(fwd.multiplyScalar(cruiseSpeed), delta * 2.8);
             pos.addScaledVector(vel, delta);
           }
         } else if (playerMode === 'ROCKET') {
@@ -260,19 +280,36 @@ export default function App() {
           const boost = THREE.MathUtils.clamp((pos.y - 2000) / 4000, 0, 1);
           vel.addScaledVector(fwd, (38 + boost * 85) * throttle * delta);
 
-          if (pos.y < 2500 && Math.hypot(pos.x, pos.z) < 3000) {
+          // Gravity pull near Earth (only when airborne)
+          if (pos.y > 0.2 && pos.y < 2500 && Math.hypot(pos.x, pos.z) < 3000) {
             vel.y -= 9.8 * (1 - pos.y / 2500) * delta;
           }
           pos.addScaledVector(vel, delta);
 
-          if (destination === 'EARTH' && pos.y < 0.2 && Math.hypot(pos.x, pos.z) < 150) pos.y = 0.2;
-
+          // Manual touchdown detection
           if (isMoon) {
-            if (pos.distanceTo(MOON_LANDING_SITE) < 24 || (pos.distanceTo(MOON_POSITION) <= MOON_RADIUS + 2 && pos.y > 10000)) {
+            if (pos.distanceTo(MOON_LANDING_SITE) < 28 || (pos.distanceTo(MOON_POSITION) <= MOON_RADIUS + 2 && pos.y > 10000)) {
               landRocket(MOON_LANDING_SITE, 'EARTH');
             }
-          } else if (pos.y <= 0.6 && Math.hypot(pos.x - EARTH_LANDING_SITE.x, pos.z - EARTH_LANDING_SITE.z) < 25) {
-            landRocket(EARTH_LANDING_SITE, 'MOON');
+          } else {
+            // Earth touchdown on launchpad
+            if (pos.y <= 1.2 && Math.hypot(pos.x - EARTH_LANDING_SITE.x, pos.z - EARTH_LANDING_SITE.z) < 32) {
+              landRocket(EARTH_LANDING_SITE, 'MOON');
+            }
+          }
+        }
+
+        // HARD GROUND SAFETY CLAMP: Rocket can NEVER penetrate below ground surface
+        if (!isMoon || pos.y < 3000) {
+          if (pos.y < 0.2) {
+            pos.y = 0.2;
+            if (vel.y < 0) vel.y = 0;
+          }
+        }
+        if (isMoon && pos.distanceTo(MOON_POSITION) < MOON_RADIUS + 30) {
+          if (pos.y < MOON_TOUCHDOWN_Y) {
+            pos.y = MOON_TOUCHDOWN_Y;
+            if (vel.y < 0) vel.y = 0;
           }
         }
 
@@ -283,7 +320,7 @@ export default function App() {
         const targetDist = isMoon ? moonDist : earthDist;
 
         setStats({
-          altitude: Math.round(pos.y),
+          altitude: Math.max(0, Math.round(pos.y)),
           speed: !isFlying && isLanded ? 0 : Math.round(vel.length() * 3.6),
           targetDist,
           destination,

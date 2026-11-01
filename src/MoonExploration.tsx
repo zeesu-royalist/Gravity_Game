@@ -124,37 +124,31 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
     if (playerMode === 'ASTRONAUT') {
       const walkSpeed = 5.2; // m/s
       let moving = false;
+      let forwardDir = 0;
 
-      // Calculate move vector based on camera/player orientation
-      const moveVec = new THREE.Vector3(0, 0, 0);
-
+      // W / ▲ moves astronaut forward (in direction of visor/chest)
       if (keys['KeyW'] || keys['ArrowUp']) {
-        moveVec.z -= 1;
+        forwardDir += 1;
         moving = true;
       }
+      // S / ▼ moves astronaut backward
       if (keys['KeyS'] || keys['ArrowDown']) {
-        moveVec.z += 1;
+        forwardDir -= 1;
         moving = true;
       }
+      // A / ◀ turns astronaut left
       if (keys['KeyA'] || keys['ArrowLeft']) {
-        moveVec.x -= 1;
-        astronautRotY.current += 2.4 * delta;
-        moving = true;
+        astronautRotY.current += 2.8 * delta;
       }
+      // D / ▶ turns astronaut right
       if (keys['KeyD'] || keys['ArrowRight']) {
-        moveVec.x += 1;
-        astronautRotY.current -= 2.4 * delta;
-        moving = true;
+        astronautRotY.current -= 2.8 * delta;
       }
 
-      if (moveVec.lengthSq() > 0) {
-        moveVec.normalize();
-        // Move in facing direction
-        const facing = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), astronautRotY.current);
-        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), astronautRotY.current);
-
-        astroPos.addScaledVector(facing, -moveVec.z * walkSpeed * delta);
-        astroPos.addScaledVector(right, moveVec.x * walkSpeed * delta);
+      if (forwardDir !== 0) {
+        // Astronaut model visor and chest face +Z in local model space
+        const facing = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), astronautRotY.current);
+        astroPos.addScaledVector(facing, forwardDir * walkSpeed * delta);
       }
 
       // Low Lunar Gravity Jump (1.62 m/s^2)

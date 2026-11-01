@@ -219,15 +219,22 @@ export const RealisticLandscape: React.FC<{ altitude?: number }> = ({ altitude =
           distance={450000}
           sunPosition={[180, 220, 160]} // High, clear, bright natural daylight
           turbidity={2.4}
-          rayleigh={Math.max(0.01, 0.85 * (1 - altitude / 4500))}
+          rayleigh={Math.max(0.01, 0.85 * (1 - Math.max(0, altitude) / 4500))}
           mieCoefficient={0.005}
           mieDirectionalG={0.82}
         />
       )}
 
-      {/* Atmospheric Haze on Earth surface (fades out in space) */}
+      {/* Atmospheric Haze on Earth surface (fades out in space, clamped so never collapses) */}
       {altitude < 2500 && (
-        <fog attach="fog" args={['#b8daf0', 400 + altitude * 0.4, 3000 + altitude * 1.5]} />
+        <fog
+          attach="fog"
+          args={[
+            '#b8daf0',
+            Math.max(250, 400 + Math.max(0, altitude) * 0.4),
+            Math.max(1600, 3000 + Math.max(0, altitude) * 1.5),
+          ]}
+        />
       )}
 
       {/* ================= CURVED GOL EARTH - NATURAL LIGHT GREEN GRASS ================= */}
