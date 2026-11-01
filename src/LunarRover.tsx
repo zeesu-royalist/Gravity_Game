@@ -5,6 +5,7 @@ import * as THREE from 'three';
 interface LunarRoverProps {
   position: THREE.Vector3;
   rotationY: number;
+  quaternion?: THREE.Quaternion;
   steerAngle: number;
   wheelSpin: number;
   isDriven: boolean;
@@ -14,6 +15,7 @@ interface LunarRoverProps {
 export const LunarRover: React.FC<LunarRoverProps> = ({
   position,
   rotationY,
+  quaternion,
   steerAngle,
   wheelSpin,
   isDriven,
@@ -29,7 +31,11 @@ export const LunarRover: React.FC<LunarRoverProps> = ({
     if (!groupRef.current) return;
 
     groupRef.current.position.copy(position);
-    groupRef.current.rotation.y = rotationY;
+    if (quaternion) {
+      groupRef.current.quaternion.copy(quaternion);
+    } else {
+      groupRef.current.rotation.set(0, rotationY, 0);
+    }
 
     // Front wheel steering
     if (frontLeftWheelRef.current) frontLeftWheelRef.current.rotation.y = steerAngle;

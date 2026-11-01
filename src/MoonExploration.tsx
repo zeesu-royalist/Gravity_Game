@@ -8,6 +8,54 @@ import { MOON_POSITION, MOON_RADIUS } from './SpaceEnvironment';
 export const MOON_TOUCHDOWN_Y = MOON_POSITION.y + MOON_RADIUS + 0.2;
 export const MOON_LANDING_SITE = new THREE.Vector3(MOON_POSITION.x, MOON_TOUCHDOWN_Y, MOON_POSITION.z);
 
+// Calculate exact Moon surface elevation conforming to the spherical Moon body
+function getMoonSurfaceElevation(x: number, z: number): number {
+  const dx = x - MOON_POSITION.x;
+  const dz = z - MOON_POSITION.z;
+  const distSq = dx * dx + dz * dz;
+  const r = MOON_RADIUS;
+
+  // Flat landing pad blast apron zone (radius 26m)
+  if (distSq <= 26 * 26) {
+    return MOON_TOUCHDOWN_Y;
+  }
+
+  // True spherical Moon elevation
+  if (distSq < r * r) {
+    const sphereY = MOON_POSITION.y + Math.sqrt(r * r - distSq);
+    const dist = Math.sqrt(distSq);
+    let terrainNoise = 0;
+    if (dist < 310) {
+      terrainNoise =
+        Math.sin(dx * 0.035) * 1.6 +
+        Math.cos(dz * 0.035) * 1.6 +
+        Math.sin((dx + dz) * 0.07) * 0.9;
+      const blend = THREE.MathUtils.clamp((dist - 26) / 20, 0, 1);
+      terrainNoise *= blend;
+    }
+    return sphereY + 0.25 + terrainNoise;
+  }
+
+  return MOON_POSITION.y;
+}
+
+// Compute surface orientation quaternion (Pitch, Roll & Yaw) conforming to spherical Moon
+function getMoonSurfaceQuat(x: number, z: number, headingAngle: number): THREE.Quaternion {
+  const y = getMoonSurfaceElevation(x, z);
+  const normal = new THREE.Vector3(
+    x - MOON_POSITION.x,
+    y - MOON_POSITION.y,
+    z - MOON_POSITION.z
+  ).normalize();
+
+  const flatForward = new THREE.Vector3(Math.sin(headingAngle), 0, Math.cos(headingAngle));
+  const tangentForward = flatForward.sub(normal.clone().multiplyScalar(flatForward.dot(normal))).normalize();
+  const tangentRight = new THREE.Vector3().crossVectors(normal, tangentForward).normalize();
+
+  const mat = new THREE.Matrix4().makeBasis(tangentRight, normal, tangentForward);
+  return new THREE.Quaternion().setFromRotationMatrix(mat);
+}
+
 interface MoonExplorationProps {
   isLanded: boolean;
   playerMode: 'ROCKET' | 'ASTRONAUT' | 'ROVER';
@@ -37,51 +85,58 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
 }) => {
   // Astronaut state
   const astronautRotY = useRef(0);
+  const astronautQuat = useRef(new THREE.Quaternion());
   const astronautVelY = useRef(0);
   const isJumping = useRef(false);
   const isMoving = useRef(false);
 
   // Rover state
   const roverRotY = useRef(0.4);
+  const roverQuat = useRef(new THREE.Quaternion());
   const roverSpeed = useRef(0);
   const roverSteerAngle = useRef(0);
   const roverWheelSpin = useRef(0);
 
-  // 1. Expansive Cratered Lunar Terrain Mesh (500m radius surrounding landing site)
+  // 1. Expansive Cratered Lunar Terrain Mesh conforming to Moon sphere curvature
   const lunarTerrainGeom = useMemo(() => {
-    const segments = 90;
-    const geom = new THREE.PlaneGeometry(650, 650, segments, segments);
+    const segments = 100;
+    const geom = new THREE.PlaneGeometry(640, 640, segments, segments);
     const pos = geom.attributes.position;
 
     for (let i = 0; i < pos.count; i++) {
       const vx = pos.getX(i);
       const vy = pos.getY(i);
-      const dist = Math.hypot(vx, vy);
+      const distSq = vx * vx + vy * vy;
+      const dist = Math.sqrt(distSq);
 
-      // Keep landing pad area completely flat
-      if (dist < 28) {
-        pos.setZ(i, 0);
+      if (dist <= 26) {
+        pos.setZ(i, 0.25);
         continue;
       }
 
-      // Rolling craters and ridges
-      const craterNoise =
-        Math.sin(vx * 0.03) * 3.8 +
-        Math.cos(vy * 0.03) * 3.8 +
-        Math.sin((vx + vy) * 0.06) * 2.2 +
-        Math.cos((vx - vy) * 0.015) * 6.5;
-
-      // Natural drop-off conforming to Moon sphere curvature
-      const curvatureDrop = -(dist * dist) / (2 * MOON_RADIUS);
-
-      pos.setZ(i, craterNoise + curvatureDrop);
+      const r = MOON_RADIUS;
+      if (distSq < r * r) {
+        const sphereDrop = Math.sqrt(r * r - distSq) - r;
+        let noise = 0;
+        if (dist < 300) {
+          noise =
+            Math.sin(vx * 0.035) * 1.6 +
+            Math.cos(-vy * 0.035) * 1.6 +
+            Math.sin((vx - vy) * 0.07) * 0.9;
+          const blend = THREE.MathUtils.clamp((dist - 26) / 20, 0, 1);
+          noise *= blend;
+        }
+        pos.setZ(i, sphereDrop + 0.25 + noise);
+      } else {
+        pos.setZ(i, -r);
+      }
     }
 
     geom.computeVertexNormals();
     return geom;
   }, []);
 
-  // 2. 45+ Random Lunar Boulders and Rock Clusters
+  // 2. Random Lunar Boulders planted directly on curved spherical surface
   const boulders = useMemo(() => {
     const list: { pos: [number, number, number]; scale: [number, number, number]; rot: [number, number, number] }[] = [];
     for (let i = 0; i < 48; i++) {
@@ -89,7 +144,7 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
       const dist = 32 + Math.random() * 240;
       const bx = MOON_LANDING_SITE.x + Math.cos(angle) * dist;
       const bz = MOON_LANDING_SITE.z + Math.sin(angle) * dist;
-      const by = MOON_TOUCHDOWN_Y - (dist * dist) / (2 * MOON_RADIUS) + 0.4;
+      const by = getMoonSurfaceElevation(bx, bz) + 0.3;
 
       list.push({
         pos: [bx, by, bz],
@@ -119,14 +174,14 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
     const canEnterRocket = playerMode === 'ASTRONAUT' && distToRocket < 5.5;
 
     // -------------------------------------------------------------
-    // A. ASTRONAUT FREE ROAMING ON MOON (Low Lunar Gravity Physics)
+    // A. ASTRONAUT FREE ROAMING ON MOON (Conforming to Spherical Moon)
     // -------------------------------------------------------------
     if (playerMode === 'ASTRONAUT') {
       const walkSpeed = 5.2; // m/s
       let moving = false;
       let forwardDir = 0;
 
-      // W / ▲ moves astronaut forward (in direction of visor/chest)
+      // W / ▲ moves astronaut forward (visor/chest direction)
       if (keys['KeyW'] || keys['ArrowUp']) {
         forwardDir += 1;
         moving = true;
@@ -145,35 +200,42 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
         astronautRotY.current -= 2.8 * delta;
       }
 
+      // Smooth surface orientation matching Moon curve
+      const targetQuat = getMoonSurfaceQuat(astroPos.x, astroPos.z, astronautRotY.current);
+      astronautQuat.current.slerp(targetQuat, delta * 12);
+
       if (forwardDir !== 0) {
-        // Astronaut model visor and chest face +Z in local model space
-        const facing = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), astronautRotY.current);
+        const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(astronautQuat.current);
         astroPos.addScaledVector(facing, forwardDir * walkSpeed * delta);
       }
 
-      // Low Lunar Gravity Jump (1.62 m/s^2)
-      const MOON_SURFACE_Y = MOON_TOUCHDOWN_Y;
-      if (keys['Space'] && !isJumping.current && astroPos.y <= MOON_SURFACE_Y + 0.1) {
-        astronautVelY.current = 4.2; // Lunar hop impulse
+      // Elevation matching spherical Moon surface
+      const surfaceY = getMoonSurfaceElevation(astroPos.x, astroPos.z);
+
+      // Low Lunar Gravity Hop Jump (1.62 m/s^2)
+      if (keys['Space'] && !isJumping.current && astroPos.y <= surfaceY + 0.15) {
+        astronautVelY.current = 4.2;
         isJumping.current = true;
       }
 
-      if (isJumping.current || astroPos.y > MOON_SURFACE_Y) {
-        astronautVelY.current -= 1.62 * 3.5 * delta; // Low moon gravity
+      if (isJumping.current || astroPos.y > surfaceY) {
+        astronautVelY.current -= 1.62 * 3.5 * delta;
         astroPos.y += astronautVelY.current * delta;
 
-        if (astroPos.y <= MOON_SURFACE_Y) {
-          astroPos.y = MOON_SURFACE_Y;
+        if (astroPos.y <= surfaceY) {
+          astroPos.y = surfaceY;
           astronautVelY.current = 0;
           isJumping.current = false;
         }
+      } else {
+        astroPos.y = surfaceY;
       }
 
       isMoving.current = moving;
     }
 
     // -------------------------------------------------------------
-    // B. LUNAR ROVER DRIVING PHYSICS
+    // B. LUNAR ROVER DRIVING (Tightly Hugging Spherical Moon Surface)
     // -------------------------------------------------------------
     if (playerMode === 'ROVER') {
       const maxSpeed = 16.0; // m/s (~58 km/h)
@@ -197,22 +259,28 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
       } else if (keys['KeyS'] || keys['ArrowDown']) {
         roverSpeed.current = Math.max(-6.0, roverSpeed.current - accel * 1.5 * delta);
       } else {
-        // Rolling resistance / drag
         roverSpeed.current = THREE.MathUtils.lerp(roverSpeed.current, 0, delta * 1.8);
       }
 
-      // Move Rover
-      const rovForward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), roverRotY.current);
+      // Orientation matching Moon curvature (Pitch, Roll & Yaw)
+      const targetQuat = getMoonSurfaceQuat(rovPos.x, rovPos.z, roverRotY.current);
+      roverQuat.current.slerp(targetQuat, delta * 12);
+
+      // Move Rover along surface tangent forward
+      const rovForward = new THREE.Vector3(0, 0, 1).applyQuaternion(roverQuat.current);
       rovPos.addScaledVector(rovForward, roverSpeed.current * delta);
 
-      // Keep rover on Moon surface
-      rovPos.y = MOON_TOUCHDOWN_Y;
+      // FIRMLY SNAP ROVER WHEELS TO MOON SURFACE ELEVATION
+      rovPos.y = getMoonSurfaceElevation(rovPos.x, rovPos.z);
 
       // Spin wheels
       roverWheelSpin.current += (roverSpeed.current / 0.42) * delta;
 
-      // Astronaut moves with rover
+      // Astronaut seated in rover
       astroPos.copy(rovPos);
+      astroPos.y += 0.35;
+      astronautRotY.current = roverRotY.current;
+      astronautQuat.current.copy(roverQuat.current);
     }
 
     onUpdateHUD({
@@ -226,7 +294,7 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
 
   return (
     <group>
-      {/* 1. Expansive Lunar Terrain Sheet surrounding landing site */}
+      {/* 1. Expansive Lunar Terrain Sheet conforming to Moon sphere curvature */}
       <group position={[MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y - 0.2, MOON_LANDING_SITE.z]} rotation={[-Math.PI / 2, 0, 0]}>
         <mesh geometry={lunarTerrainGeom} receiveShadow>
           <meshStandardMaterial
@@ -276,15 +344,17 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
       <Astronaut
         position={astronautPosRef.current}
         rotationY={astronautRotY.current}
+        quaternion={astronautQuat.current}
         isMoving={isMoving.current}
         isJumping={isJumping.current}
-        visible={playerMode === 'ASTRONAUT'}
+        visible={playerMode === 'ASTRONAUT' || playerMode === 'ROVER'}
       />
 
       {/* 5. Lunar Roving Vehicle (LRV) */}
       <LunarRover
         position={roverPosRef.current}
         rotationY={roverRotY.current}
+        quaternion={roverQuat.current}
         steerAngle={roverSteerAngle.current}
         wheelSpin={roverWheelSpin.current}
         isDriven={playerMode === 'ROVER'}
@@ -292,4 +362,3 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
     </group>
   );
 };
-

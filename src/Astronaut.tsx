@@ -5,6 +5,7 @@ import * as THREE from 'three';
 interface AstronautProps {
   position: THREE.Vector3;
   rotationY: number;
+  quaternion?: THREE.Quaternion;
   isMoving: boolean;
   isJumping: boolean;
   visible: boolean;
@@ -13,6 +14,7 @@ interface AstronautProps {
 export const Astronaut: React.FC<AstronautProps> = ({
   position,
   rotationY,
+  quaternion,
   isMoving,
   isJumping,
   visible,
@@ -28,7 +30,11 @@ export const Astronaut: React.FC<AstronautProps> = ({
     if (!groupRef.current) return;
 
     groupRef.current.position.copy(position);
-    groupRef.current.rotation.y = rotationY;
+    if (quaternion) {
+      groupRef.current.quaternion.copy(quaternion);
+    } else {
+      groupRef.current.rotation.set(0, rotationY, 0);
+    }
 
     const time = state.clock.getElapsedTime() * 8;
 
