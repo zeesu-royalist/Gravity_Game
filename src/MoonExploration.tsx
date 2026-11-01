@@ -3,7 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Astronaut } from './Astronaut';
 import { LunarRover } from './LunarRover';
-import { MOON_POSITION, MOON_RADIUS, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './missionConstants';
+import { MOON_POSITION, MOON_RADIUS } from './SpaceEnvironment';
+
+export const MOON_TOUCHDOWN_Y = MOON_POSITION.y + MOON_RADIUS + 0.2;
+export const MOON_LANDING_SITE = new THREE.Vector3(MOON_POSITION.x, MOON_TOUCHDOWN_Y, MOON_POSITION.z);
 
 
 

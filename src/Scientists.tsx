@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -29,8 +29,8 @@ export const SCIENTISTS_DATA: ScientistData[] = [
     name: 'Eng. Marcus Vance',
     role: 'Ground Transport Lead',
     quote: 'Cosmodrome Car is charged and ready for inspection drive!',
-    position: [-12.5, 0.26, 14.5],
-    rotationY: 0.8,
+    position: [3.5, 0.26, -24.0],
+    rotationY: -1.4,
     accessory: 'TABLET',
   },
   {
@@ -80,15 +80,20 @@ export const SCIENTISTS_DATA: ScientistData[] = [
   },
 ];
 
-export function SingleScientist({ data, astronautPos }: { data: ScientistData; astronautPos: THREE.Vector3 }) {
+export function SingleScientist({ data, astronautPosRef }: { data: ScientistData; astronautPosRef: React.MutableRefObject<THREE.Vector3> }) {
   const headRef = useRef<THREE.Group>(null);
   const chestRef = useRef<THREE.Group>(null);
-  const isNearby = astronautPos.distanceTo(new THREE.Vector3(...data.position)) < 7.0;
+  const [isNearby, setIsNearby] = useState(false);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime() + data.position[0];
     if (headRef.current) headRef.current.rotation.y = Math.sin(t * 0.8) * 0.15;
     if (chestRef.current) chestRef.current.position.y = 0.95 + Math.sin(t * 1.5) * 0.015;
+
+    // Name tag appears strictly when astronaut walks close (< 3.2m), hidden otherwise
+    const dist = astronautPosRef.current.distanceTo(new THREE.Vector3(...data.position));
+    if (dist < 3.2 && !isNearby) setIsNearby(true);
+    else if (dist >= 3.8 && isNearby) setIsNearby(false);
   });
 
   return (
@@ -154,11 +159,11 @@ export function SingleScientist({ data, astronautPos }: { data: ScientistData; a
   );
 }
 
-export function CosmodromeScientists({ astronautPos }: { astronautPos: THREE.Vector3 }) {
+export function CosmodromeScientists({ astronautPosRef }: { astronautPosRef: React.MutableRefObject<THREE.Vector3> }) {
   return (
     <group>
       {SCIENTISTS_DATA.map((s) => (
-        <SingleScientist key={s.id} data={s} astronautPos={astronautPos} />
+        <SingleScientist key={s.id} data={s} astronautPosRef={astronautPosRef} />
       ))}
     </group>
   );

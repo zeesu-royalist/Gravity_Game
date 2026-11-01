@@ -2,9 +2,8 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-import { MOON_POSITION, MOON_RADIUS } from './missionConstants';
-
-
+export const MOON_POSITION = new THREE.Vector3(2600, 16500, -9200);
+export const MOON_RADIUS = 680;
 export const SUN_POSITION = new THREE.Vector3(22000, 26000, 18000);
 
 // ------------------------------------------------------------------

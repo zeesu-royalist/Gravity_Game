@@ -3,20 +3,12 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { RealisticLandscape } from './RealisticLandscape';
-import { SpaceEnvironment } from './SpaceEnvironment';
-import { MoonExploration } from './MoonExploration';
-import { EarthExploration } from './EarthExploration';
+import { SpaceEnvironment, MOON_POSITION, MOON_RADIUS } from './SpaceEnvironment';
+import { MoonExploration, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './MoonExploration';
+import { EarthExploration, EARTH_CAR_DEFAULT_POS, EARTH_ASTRONAUT_DEFAULT_POS } from './EarthExploration';
 import { BuranLaunchpad, ActiveRocketMesh, LunarLandingSiteMarker } from './Rocket';
-import {
-  MOON_POSITION,
-  MOON_RADIUS,
-  MOON_TOUCHDOWN_Y,
-  MOON_LANDING_SITE,
-  EARTH_LANDING_SITE,
-  EARTH_CAR_DEFAULT_POS,
-  EARTH_ASTRONAUT_DEFAULT_POS,
-} from './missionConstants';
 
+const EARTH_LANDING_SITE = new THREE.Vector3(0, 0.2, 0);
 const MOON_APPROACH = new THREE.Vector3(MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y + 180, MOON_LANDING_SITE.z);
 
 function UniversalThirdPersonCamera({

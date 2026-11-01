@@ -6,7 +6,9 @@ import { LunarRover } from './LunarRover';
 import { getCurvedEarthY } from './RealisticLandscape';
 import { CosmodromeScientists } from './Scientists';
 
-import { EARTH_CAR_DEFAULT_POS, EARTH_ASTRONAUT_DEFAULT_POS } from './missionConstants';
+// Placed further back behind the rocket on the launch apron
+export const EARTH_CAR_DEFAULT_POS = new THREE.Vector3(0, 0.35, -24.0);
+export const EARTH_ASTRONAUT_DEFAULT_POS = new THREE.Vector3(0, 0.26, -6.0);
 
 
 
@@ -140,7 +142,7 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
 
   return (
     <group>
-      <CosmodromeScientists astronautPos={astronautPosRef.current} />
+      <CosmodromeScientists astronautPosRef={astronautPosRef} />
       {(playerMode === 'ASTRONAUT' || playerMode === 'ROVER') && (
         <Astronaut
           position={astronautPosRef.current}
