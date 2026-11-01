@@ -2,7 +2,7 @@ import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { MOON_LANDING_SITE, MOON_TOUCHDOWN_Y } from './MoonExploration';
+import { MOON_LANDING_SITE, MOON_TOUCHDOWN_Y } from './missionConstants';
 
 useGLTF.preload('/models/buran_energia_launchpad.glb');
 useGLTF.preload('/models/rocket.glb');
