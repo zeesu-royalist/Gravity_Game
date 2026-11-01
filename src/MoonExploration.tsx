@@ -22,6 +22,7 @@ interface MoonExplorationProps {
   astronautPosRef: React.MutableRefObject<THREE.Vector3>;
   roverPosRef: React.MutableRefObject<THREE.Vector3>;
   keysRef: React.MutableRefObject<{ [key: string]: boolean }>;
+  rocketOnMoon?: boolean;
 }
 
 export const MoonExploration: React.FC<MoonExplorationProps> = ({
@@ -32,6 +33,7 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
   astronautPosRef,
   roverPosRef,
   keysRef,
+  rocketOnMoon = true,
 }) => {
   // Astronaut state
   const astronautRotY = useRef(0);
@@ -256,23 +258,25 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
         </mesh>
       ))}
 
-      {/* 3. Rocket Access Ladder deployed to Moon ground */}
-      <group position={[MOON_LANDING_SITE.x + 2.8, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 1.2]} rotation={[0, -0.6, 0]}>
-        {/* Vertical Rails */}
-        {[-0.35, 0.35].map((rx) => (
-          <mesh key={rx} position={[rx, 6, 0]}>
-            <cylinderGeometry args={[0.03, 0.03, 12]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
-          </mesh>
-        ))}
-        {/* Rungs */}
-        {Array.from({ length: 18 }).map((_, rIdx) => (
-          <mesh key={rIdx} position={[0, rIdx * 0.65 + 0.3, 0]} rotation={[0, 0, Math.PI / 2]}>
-            <cylinderGeometry args={[0.025, 0.025, 0.7]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
-          </mesh>
-        ))}
-      </group>
+      {/* 3. Rocket Access Ladder deployed to Moon ground (only when rocket is on Moon) */}
+      {rocketOnMoon && (
+        <group position={[MOON_LANDING_SITE.x + 2.8, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 1.2]} rotation={[0, -0.6, 0]}>
+          {/* Vertical Rails */}
+          {[-0.35, 0.35].map((rx) => (
+            <mesh key={rx} position={[rx, 6, 0]}>
+              <cylinderGeometry args={[0.03, 0.03, 12]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
+            </mesh>
+          ))}
+          {/* Rungs */}
+          {Array.from({ length: 18 }).map((_, rIdx) => (
+            <mesh key={rIdx} position={[0, rIdx * 0.65 + 0.3, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.025, 0.025, 0.7]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
+            </mesh>
+          ))}
+        </group>
+      )}
 
       {/* 4. Apollo EVA Spacesuit Astronaut */}
       <Astronaut
