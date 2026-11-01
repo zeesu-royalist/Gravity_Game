@@ -106,7 +106,10 @@ export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rock
   const flameLightRef = useRef<THREE.PointLight>(null);
 
   const zeesuTexture = useMemo(() => createZeesuEmblemTexture(), []);
-  const zeesuDecalGeom = useMemo(() => new THREE.CylinderGeometry(1.80, 1.80, 3.6, 32, 1, true, -Math.PI / 4, Math.PI / 2), []);
+  const zeesuDecalGeom = useMemo(() => {
+    const thetaLen = Math.PI * 0.32; // ~57° sleek wrap around fuselage
+    return new THREE.CylinderGeometry(1.80, 1.80, 2.2, 32, 1, true, -thetaLen / 2, thetaLen);
+  }, []);
 
   const centeredRocket = useMemo(() => {
     const clone = scene.clone();
@@ -173,7 +176,7 @@ export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rock
       <mesh geometry={zeesuDecalGeom} position={[0, 16.5, 0]}>
         <meshStandardMaterial map={zeesuTexture} transparent opacity={0.99} roughness={0.22} metalness={0.68} side={THREE.DoubleSide} />
       </mesh>
-      <pointLight position={[0, 16.5, 2.5]} color="#fef08a" intensity={2.5} distance={4.5} />
+      <pointLight position={[0, 16.5, 2.2]} color="#fef08a" intensity={1.8} distance={3.5} />
 
       {/* Engine Exhaust Flames (Base at y = 0, pointing downwards) */}
       <group ref={flameGroupRef} position={[0, 0, 0]}>
