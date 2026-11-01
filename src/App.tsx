@@ -92,6 +92,17 @@ function ActiveRocketMesh({
     return clone;
   }, [scene]);
 
+  // Base-anchored flame cone geometry:
+  // Base is strictly at y = 0.0 (firmly attached to rocket engine nozzle bells),
+  // Tip extends purely downwards in -Y to y = -1.0.
+  // Not a single vertex can EVER go above y = 0.0!
+  const flameConeGeom = useMemo(() => {
+    const geom = new THREE.ConeGeometry(1.0, 1.0, 24);
+    geom.rotateX(Math.PI); // Tip points downward (-Y)
+    geom.translate(0, -0.5, 0); // Base is at y = 0, Tip is at y = -1.0
+    return geom;
+  }, []);
+
   useFrame((state, delta) => {
     if (!groupRef.current) return;
 
@@ -103,25 +114,31 @@ function ActiveRocketMesh({
     const isSpace = rocketPos.y > 3500;
 
     if (isBurning) {
-      const flicker = 1.0 + Math.sin(state.clock.elapsedTime * 45) * 0.16;
-      const plumeWidth = isSpace ? 2.5 : 1.4;
-      const plumeLength = (6.0 + throttle * 4.5) * flicker;
+      const flicker = 1.0 + Math.sin(state.clock.elapsedTime * 45) * 0.12;
+      const coreRadius = (isSpace ? 1.6 : 1.1) * (0.85 + throttle * 0.3);
+      const coreLength = (10.0 + throttle * 6.5) * flicker * (isSpace ? 1.25 : 1.0);
+
+      const outerRadius = coreRadius * 1.65;
+      const outerLength = coreLength * 1.35;
 
       if (flameCoreRef.current) {
         flameCoreRef.current.visible = true;
-        flameCoreRef.current.scale.set(plumeWidth * 0.55, plumeLength * 0.7, plumeWidth * 0.55);
+        flameCoreRef.current.scale.set(coreRadius, coreLength, coreRadius);
       }
       if (flameOuterRef.current) {
         flameOuterRef.current.visible = true;
-        flameOuterRef.current.scale.set(plumeWidth, plumeLength, plumeWidth);
+        flameOuterRef.current.scale.set(outerRadius, outerLength, outerRadius);
       }
       if (boosterFlamesRef.current) {
         boosterFlamesRef.current.visible = true;
-        const bs = (0.7 + throttle * 0.4) * flicker;
-        boosterFlamesRef.current.scale.set(bs, bs * (isSpace ? 1.4 : 1.05), bs);
+        const bRad = (isSpace ? 1.05 : 0.78) * (0.8 + throttle * 0.25);
+        const bLen = (7.5 + throttle * 5.0) * flicker * (isSpace ? 1.2 : 1.0);
+        boosterFlamesRef.current.children.forEach((bGroup) => {
+          bGroup.scale.set(bRad, bLen, bRad);
+        });
       }
       if (flameLightRef.current) {
-        flameLightRef.current.intensity = throttle * (isSpace ? 35 : 22);
+        flameLightRef.current.intensity = throttle * (isSpace ? 35 : 24);
       }
 
       // Nozzle Gimbaling
@@ -138,7 +155,7 @@ function ActiveRocketMesh({
         );
       }
 
-      // Visual RCS Puffs
+      // Visual RCS Puffs at nose
       if (rcsPuffLeftRef.current) rcsPuffLeftRef.current.visible = rcsActive.yaw > 0;
       if (rcsPuffRightRef.current) rcsPuffRightRef.current.visible = rcsActive.yaw < 0;
       if (rcsPuffFrontRef.current) rcsPuffFrontRef.current.visible = rcsActive.pitch > 0;
@@ -157,12 +174,12 @@ function ActiveRocketMesh({
 
   const ROCKET_SCALE = 1.2;
 
-  // 4 Strap-on booster engine offsets
+  // 4 Strap-on booster engine nozzle positions right under each booster bell (y = 0.0)
   const boosterOffsets: [number, number, number][] = [
-    [1.75, -2.1, 0],
-    [-1.75, -2.1, 0],
-    [0, -2.1, 1.75],
-    [0, -2.1, -1.75],
+    [2.1, 0.0, 0.0],
+    [-2.1, 0.0, 0.0],
+    [0.0, 0.0, 1.35],
+    [0.0, 0.0, -1.35],
   ];
 
   return (
@@ -172,39 +189,63 @@ function ActiveRocketMesh({
         <primitive object={centeredRocket} />
       </group>
 
-      {/* Engine Exhaust Flames Group */}
-      <group ref={flameGroupRef}>
-        {/* Core Main Engine Flame */}
+      {/* Engine Exhaust Flames Group - Attached at Engine Bells (y = 0) and shooting purely downwards */}
+      <group ref={flameGroupRef} position={[0, 0, 0]}>
+        {/* Core Main Engine Exhaust Plume */}
         <mesh
           ref={flameOuterRef}
-          position={[0, -2.4, 0]}
-          rotation={[Math.PI, 0, 0]}
+          geometry={flameConeGeom}
+          position={[0, 0, -0.15]}
           visible={false}
         >
-          <coneGeometry args={[1.5, 6.5, 16]} />
-          <meshBasicMaterial color="#ff7700" transparent opacity={0.88} />
+          <meshBasicMaterial
+            color="#ff6a00"
+            transparent
+            opacity={0.82}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
         </mesh>
+
+        {/* Hot Core Shock Flame */}
         <mesh
           ref={flameCoreRef}
-          position={[0, -1.8, 0]}
-          rotation={[Math.PI, 0, 0]}
+          geometry={flameConeGeom}
+          position={[0, 0, -0.15]}
           visible={false}
         >
-          <coneGeometry args={[0.85, 4.2, 16]} />
-          <meshBasicMaterial color="#ffffff" />
+          <meshBasicMaterial
+            color="#fffdf0"
+            transparent
+            opacity={0.96}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
         </mesh>
 
         {/* 4 Strap-On Booster Engine Flames */}
         <group ref={boosterFlamesRef} visible={false}>
           {boosterOffsets.map(([bx, by, bz], idx) => (
             <group key={idx} position={[bx, by, bz]}>
-              <mesh rotation={[Math.PI, 0, 0]}>
-                <coneGeometry args={[0.8, 4.8, 12]} />
-                <meshBasicMaterial color="#ff8800" transparent opacity={0.85} />
+              {/* Outer Booster Flame */}
+              <mesh geometry={flameConeGeom}>
+                <meshBasicMaterial
+                  color="#ff7a00"
+                  transparent
+                  opacity={0.8}
+                  blending={THREE.AdditiveBlending}
+                  depthWrite={false}
+                />
               </mesh>
-              <mesh position={[0, 0.4, 0]} rotation={[Math.PI, 0, 0]}>
-                <coneGeometry args={[0.45, 3.2, 12]} />
-                <meshBasicMaterial color="#ffffff" />
+              {/* Inner White-Hot Booster Core */}
+              <mesh geometry={flameConeGeom} scale={[0.55, 0.7, 0.55]}>
+                <meshBasicMaterial
+                  color="#ffffff"
+                  transparent
+                  opacity={0.95}
+                  blending={THREE.AdditiveBlending}
+                  depthWrite={false}
+                />
               </mesh>
             </group>
           ))}
@@ -214,7 +255,7 @@ function ActiveRocketMesh({
       {/* Thruster Illumination Light */}
       <pointLight
         ref={flameLightRef}
-        position={[0, -2.5, 0]}
+        position={[0, -1.0, 0]}
         color="#ff8800"
         intensity={0}
         distance={220}
@@ -290,15 +331,15 @@ function UniversalThirdPersonCamera({
   resetCount,
 }: CameraProps) {
   const controlsRef = useRef<any>(null);
-  const prevTargetPos = useRef(new THREE.Vector3(0, 14, 0));
+  const prevTargetPos = useRef(new THREE.Vector3(0, 13.7, 0));
   const { camera } = useThree();
 
   useEffect(() => {
     if (resetCount > 0) {
-      camera.position.set(14, 18, 22);
-      prevTargetPos.current.set(0, 14, 0);
+      camera.position.set(0, 16, 62);
+      prevTargetPos.current.set(0, 13.7, 0);
       if (controlsRef.current) {
-        controlsRef.current.target.set(0, 14, 0);
+        controlsRef.current.target.set(0, 13.7, 0);
         controlsRef.current.update();
       }
     }
@@ -311,7 +352,7 @@ function UniversalThirdPersonCamera({
     // Determine current target based on playerMode
     const targetPos = new THREE.Vector3();
     if (playerMode === 'ROCKET') {
-      targetPos.set(rocketPos.x, rocketPos.y + 10, rocketPos.z);
+      targetPos.set(rocketPos.x, rocketPos.y + 13.5, rocketPos.z);
     } else if (playerMode === 'ASTRONAUT') {
       targetPos.set(astronautPos.x, astronautPos.y + 1.2, astronautPos.z);
     } else if (playerMode === 'ROVER') {
@@ -330,13 +371,13 @@ function UniversalThirdPersonCamera({
 
   // Dynamic min/max camera distances per mode
   const minDistance = playerMode === 'ASTRONAUT' ? 2.5 : playerMode === 'ROVER' ? 4.5 : 7;
-  const maxDistance = playerMode === 'ASTRONAUT' ? 14 : playerMode === 'ROVER' ? 24 : 65;
+  const maxDistance = playerMode === 'ASTRONAUT' ? 16 : playerMode === 'ROVER' ? 26 : 75;
 
   return (
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      target={[0, 14, 0]}
+      target={[0, 13.7, 0]}
       enablePan={false}
       enableZoom={true}
       enableRotate={true}
@@ -1070,7 +1111,7 @@ export default function App() {
       <Canvas
         shadows
         camera={{
-          position: [14, 18, 22],
+          position: [0, 16, 62],
           fov: 45,
           near: 0.5,
           far: 75000,
