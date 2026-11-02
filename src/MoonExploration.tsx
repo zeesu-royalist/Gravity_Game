@@ -219,7 +219,7 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
         quaternion={astronautQuat.current}
         isMoving={isMoving.current}
         isJumping={isJumping.current}
-        visible={playerMode === 'ASTRONAUT' || playerMode === 'ROVER'}
+        visible={playerMode === 'ASTRONAUT'}
       />
       <LunarRover
         position={roverPosRef.current}

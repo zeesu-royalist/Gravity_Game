@@ -4,6 +4,8 @@ import * as THREE from 'three';
 
 export const MOON_POSITION = new THREE.Vector3(2600, 16500, -9200);
 export const MOON_RADIUS = 680;
+export const MARS_POSITION = new THREE.Vector3(-14000, 24000, 16000);
+export const MARS_RADIUS = 920;
 export const SUN_POSITION = new THREE.Vector3(22000, 26000, 18000);
 
 // ------------------------------------------------------------------
@@ -122,6 +124,90 @@ function createMoonTextures() {
   colorTexture.colorSpace = THREE.SRGBColorSpace;
 
   return colorTexture;
+}
+
+// Procedural Photorealistic Mars Texture (Iron Oxide, Canyons, Volcanoes, Polar Ice)
+function createMarsTexture(): THREE.CanvasTexture {
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+
+  // 1. Rust-red/orange iron oxide base
+  ctx.fillStyle = '#b8420e';
+  ctx.fillRect(0, 0, size, size);
+
+  // 2. Dark Volcanic Basalt Provinces
+  const darkBasins = [
+    { x: 580, y: 520, rx: 160, ry: 100 },
+    { x: 380, y: 320, rx: 190, ry: 130 },
+    { x: 740, y: 580, rx: 170, ry: 90 },
+    { x: 240, y: 640, rx: 140, ry: 110 },
+    { x: 480, y: 680, rx: 180, ry: 80 },
+  ];
+  darkBasins.forEach((r) => {
+    const grad = ctx.createRadialGradient(r.x, r.y, 0, r.x, r.y, Math.max(r.rx, r.ry));
+    grad.addColorStop(0, '#421707');
+    grad.addColorStop(0.55, '#5c220a');
+    grad.addColorStop(0.85, '#82300f');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(r.x, r.y, r.rx, r.ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 3. Valles Marineris (Grand Canyon of Mars)
+  ctx.strokeStyle = '#381205';
+  ctx.lineWidth = 14;
+  ctx.beginPath();
+  ctx.moveTo(180, 500);
+  ctx.bezierCurveTo(340, 520, 520, 490, 720, 530);
+  ctx.stroke();
+
+  // 4. Olympus Mons (Giant Shield Volcano)
+  const oGrad = ctx.createRadialGradient(280, 360, 0, 280, 360, 85);
+  oGrad.addColorStop(0, '#2b0d04');
+  oGrad.addColorStop(0.25, '#78280a');
+  oGrad.addColorStop(0.8, '#d45618');
+  oGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = oGrad;
+  ctx.beginPath();
+  ctx.arc(280, 360, 85, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 5. Dust noise
+  const imgData = ctx.getImageData(0, 0, size, size);
+  const data = imgData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 26;
+    data[i] = Math.min(255, Math.max(30, data[i] + noise * 1.2));
+    data[i + 1] = Math.min(255, Math.max(10, data[i + 1] + noise * 0.6));
+    data[i + 2] = Math.min(255, Math.max(5, data[i + 2] + noise * 0.3));
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  // 6. Polar Ice Caps (North & South)
+  const nGrad = ctx.createLinearGradient(0, 0, 0, 95);
+  nGrad.addColorStop(0, '#ffffff');
+  nGrad.addColorStop(0.7, '#e0f2fe');
+  nGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = nGrad;
+  ctx.fillRect(0, 0, size, 95);
+
+  const sGrad = ctx.createLinearGradient(0, size, 0, size - 85);
+  sGrad.addColorStop(0, '#ffffff');
+  sGrad.addColorStop(0.75, '#e0f2fe');
+  sGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = sGrad;
+  ctx.fillRect(0, size - 85, size, 85);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 // ------------------------------------------------------------------
@@ -263,8 +349,10 @@ interface SpaceProps {
 
 export const SpaceEnvironment: React.FC<SpaceProps> = ({ altitude, rocketPos }) => {
   const moonRef = useRef<THREE.Group>(null);
+  const marsRef = useRef<THREE.Group>(null);
 
   const moonTexture = useMemo(() => createMoonTextures(), []);
+  const marsTexture = useMemo(() => createMarsTexture(), []);
   const earthTexture = useMemo(() => createEarthGlobeTexture(), []);
 
   // Space factor: 0.0 at Earth surface -> 1.0 in deep space (4500m+)
@@ -272,11 +360,10 @@ export const SpaceEnvironment: React.FC<SpaceProps> = ({ altitude, rocketPos }) 
     return THREE.MathUtils.clamp((altitude - 1200) / 4000, 0, 1);
   }, [altitude]);
 
-  // Rotate moon slowly on its axis
+  // Rotate moon & mars slowly on their axes
   useFrame((_, delta) => {
-    if (moonRef.current) {
-      moonRef.current.rotation.y += delta * 0.02;
-    }
+    if (moonRef.current) moonRef.current.rotation.y += delta * 0.02;
+    if (marsRef.current) marsRef.current.rotation.y += delta * 0.015;
   });
 
   return (
@@ -343,6 +430,40 @@ export const SpaceEnvironment: React.FC<SpaceProps> = ({ altitude, rocketPos }) 
                   <sphereGeometry args={[0.22, 8, 8]} />
                   <meshBasicMaterial color="#38bdf8" />
                 </mesh>
+              </group>
+            );
+          })}
+        </group>
+      </group>
+
+      {/* 2B. Realistic 3D Mars Planet Body (Red Planet with Ares Base 1) */}
+      <group ref={marsRef} position={MARS_POSITION.toArray()}>
+        <mesh castShadow receiveShadow>
+          <sphereGeometry args={[MARS_RADIUS, 64, 64]} />
+          <meshStandardMaterial map={marsTexture} roughness={0.92} metalness={0.06} />
+        </mesh>
+        <mesh scale={[1.025, 1.025, 1.025]}>
+          <sphereGeometry args={[MARS_RADIUS, 32, 32]} />
+          <meshBasicMaterial color="#ea580c" side={THREE.BackSide} transparent opacity={0.22 * spaceFactor} />
+        </mesh>
+        {/* Martian Ares Base 1 Landing Pad */}
+        <group position={[0, MARS_RADIUS, 0]}>
+          <mesh position={[0, 0.12, 0]}>
+            <cylinderGeometry args={[24, 25, 0.25, 32]} />
+            <meshStandardMaterial color="#2d1308" roughness={0.9} metalness={0.2} />
+          </mesh>
+          <mesh position={[0, 0.26, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[8, 9.8, 32]} />
+            <meshBasicMaterial color="#f97316" side={THREE.DoubleSide} />
+          </mesh>
+          <mesh position={[0, 0.27, 0]}><boxGeometry args={[20, 0.02, 0.9]} /><meshBasicMaterial color="#f97316" /></mesh>
+          <mesh position={[0, 0.27, 0]}><boxGeometry args={[0.9, 0.02, 20]} /><meshBasicMaterial color="#f97316" /></mesh>
+          {Array.from({ length: 8 }).map((_, i) => {
+            const angle = (i / 8) * Math.PI * 2;
+            return (
+              <group key={i} position={[Math.cos(angle) * 23, 0.4, Math.sin(angle) * 23]}>
+                <mesh><cylinderGeometry args={[0.25, 0.35, 0.7, 8]} /><meshStandardMaterial color="#334155" /></mesh>
+                <mesh position={[0, 0.45, 0]}><sphereGeometry args={[0.22, 8, 8]} /><meshBasicMaterial color="#f97316" /></mesh>
               </group>
             );
           })}

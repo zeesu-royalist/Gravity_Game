@@ -3,13 +3,15 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { RealisticLandscape } from './RealisticLandscape';
-import { SpaceEnvironment, MOON_POSITION, MOON_RADIUS } from './SpaceEnvironment';
+import { SpaceEnvironment, MOON_POSITION, MOON_RADIUS, MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 import { MoonExploration, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './MoonExploration';
+import { MarsExploration, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE } from './MarsExploration';
 import { EarthExploration, EARTH_CAR_DEFAULT_POS, EARTH_ASTRONAUT_DEFAULT_POS } from './EarthExploration';
 import { BuranLaunchpad, ActiveRocketMesh, LunarLandingSiteMarker } from './Rocket';
 
 const EARTH_LANDING_SITE = new THREE.Vector3(0, 0.2, 0);
 const MOON_APPROACH = new THREE.Vector3(MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y + 180, MOON_LANDING_SITE.z);
+const MARS_APPROACH = new THREE.Vector3(MARS_LANDING_SITE.x, MARS_TOUCHDOWN_Y + 240, MARS_LANDING_SITE.z);
 
 function UniversalThirdPersonCamera({
   playerMode, rocketPos, astronautPos, roverPos, resetCount,
@@ -62,20 +64,36 @@ function UniversalThirdPersonCamera({
   );
 }
 
-function getMissionStage(isMoon: boolean, alt: number, moonDist: number, targetDist: number, isFlying: boolean, isLanded: boolean): string {
-  if (isMoon) {
+function getMissionStage(
+  dest: 'MOON' | 'MARS' | 'EARTH',
+  alt: number,
+  dist: number,
+  targetDist: number,
+  isFlying: boolean,
+  isLanded: boolean,
+  world: 'EARTH' | 'MOON' | 'MARS'
+): string {
+  if (dest === 'MARS') {
+    if (!isFlying && !isLanded) return 'STANDBY ON EARTH PAD';
+    if (isLanded) return '🔴 MISSION COMPLETE: TOUCHDOWN ON MARS (ARES BASE)!';
+    if (alt < 1200) return 'STAGE 1: ATMOSPHERIC ASCENT';
+    if (alt < 5000) return 'STAGE 2: STRATOSPHERE TRANSITION';
+    if (alt < 12000) return 'STAGE 3: TRANS-MARS INJECTION (TMI)';
+    return dist > 4000 ? 'STAGE 4: INTERPLANETARY MARS CRUISE' : dist > 600 ? 'STAGE 5: MARTIAN APPROACH & RETRO-BURN' : 'STAGE 6: TOUCHDOWN ON ARES BASE PAD';
+  }
+  if (dest === 'MOON') {
     if (!isFlying && !isLanded) return 'STANDBY ON EARTH PAD';
     if (isLanded) return '🌕 MISSION COMPLETE: TOUCHDOWN ON MOON!';
     if (alt < 1200) return 'STAGE 1: ATMOSPHERIC ASCENT';
     if (alt < 4000) return 'STAGE 2: STRATOSPHERE TRANSITION';
     if (alt < 10000) return 'STAGE 3: TRANSLUNAR INJECTION (TLI)';
-    return moonDist > 3000 ? 'STAGE 4: CISLUNAR CRUISE' : moonDist > 500 ? 'STAGE 5: LUNAR APPROACH & RETRO-BURN' : 'STAGE 6: TOUCHDOWN ON MOON PAD';
+    return dist > 3000 ? 'STAGE 4: CISLUNAR CRUISE' : dist > 500 ? 'STAGE 5: LUNAR APPROACH & RETRO-BURN' : 'STAGE 6: TOUCHDOWN ON MOON PAD';
   }
-  if (!isFlying && isLanded) return 'LUNAR BASE: READY FOR EARTH LAUNCH';
+  if (!isFlying && isLanded) return `${world === 'MARS' ? 'ARES BASE' : 'LUNAR BASE'}: READY FOR EARTH RETURN`;
   if (isLanded) return '🌍 MISSION COMPLETE: SAFE RETURN TO EARTH!';
-  if (moonDist < 800) return 'RETURN STAGE 1: LUNAR ASCENT';
-  if (moonDist < 3500) return 'RETURN STAGE 2: TRANS-EARTH INJECTION';
-  return targetDist > 3500 ? 'RETURN STAGE 3: DEEP SPACE TRANSIT' : targetDist > 500 ? 'RETURN STAGE 4: RE-ENTRY' : 'RETURN STAGE 5: RETRO-BURN DESCENT';
+  if (dist < 800) return 'RETURN STAGE 1: PLANETARY ASCENT';
+  if (dist < 3500) return 'RETURN STAGE 2: TRANS-EARTH INJECTION';
+  return targetDist > 3500 ? 'RETURN STAGE 3: DEEP SPACE TRANSIT' : targetDist > 500 ? 'RETURN STAGE 4: EARTH RE-ENTRY' : 'RETURN STAGE 5: RETRO-BURN DESCENT';
 }
 
 function Loader() {
@@ -94,7 +112,8 @@ function Loader() {
 }
 
 export default function App() {
-  const [destination, setDestination] = useState<'MOON' | 'EARTH'>('MOON');
+  const [destination, setDestination] = useState<'MOON' | 'MARS' | 'EARTH'>('MOON');
+  const [showDestModal, setShowDestModal] = useState(false);
   const [isFlying, setIsFlying] = useState(false);
   const [isLanded, setIsLanded] = useState(false);
   const [autopilot, setAutopilot] = useState(false);
@@ -102,7 +121,7 @@ export default function App() {
   const [resetCount, setResetCount] = useState(0);
   const [playerMode, setPlayerMode] = useState<'ROCKET' | 'ASTRONAUT' | 'ROVER'>('ROCKET');
 
-  const [stats, setStats] = useState({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON' as 'MOON' | 'EARTH', stage: 'STANDBY ON EARTH PAD' });
+  const [stats, setStats] = useState({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON' as 'MOON' | 'MARS' | 'EARTH', stage: 'STANDBY ON EARTH PAD' });
   const [hudState, setHudState] = useState({ canEnterRover: false, canEnterRocket: false, roverSpeed: 0 });
 
   const posRef = useRef(new THREE.Vector3(0, 0.2, 0));
@@ -116,10 +135,16 @@ export default function App() {
   const earthCarPosRef = useRef(EARTH_CAR_DEFAULT_POS.clone());
   const moonAstroPosRef = useRef(new THREE.Vector3(MOON_LANDING_SITE.x + 3.8, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 1.8));
   const moonRoverPosRef = useRef(new THREE.Vector3(MOON_LANDING_SITE.x + 11.0, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 5.5));
+  const marsAstroPosRef = useRef(new THREE.Vector3(MARS_LANDING_SITE.x + 3.8, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 1.8));
+  const marsRoverPosRef = useRef(new THREE.Vector3(MARS_LANDING_SITE.x + 11.0, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 5.5));
 
   const isAtMoon = posRef.current.distanceTo(MOON_LANDING_SITE) < 40;
+  const isAtMars = posRef.current.distanceTo(MARS_LANDING_SITE) < 40;
+  const currentWorld: 'EARTH' | 'MOON' | 'MARS' = isAtMars ? 'MARS' : isAtMoon ? 'MOON' : 'EARTH';
 
-  const handleLaunch = () => {
+  const executeLaunch = (chosenDest?: 'MOON' | 'MARS') => {
+    if (chosenDest) setDestination(chosenDest);
+    setShowDestModal(false);
     setIsFlying(true);
     setIsLanded(false);
     setPlayerMode('ROCKET');
@@ -128,11 +153,20 @@ export default function App() {
     quatRef.current.set(0, 0, 0, 1);
   };
 
+  const handleLaunch = () => {
+    if (!isFlying && currentWorld === 'EARTH') {
+      setShowDestModal(true);
+    } else {
+      executeLaunch();
+    }
+  };
+
   const handleReset = () => {
     setIsFlying(false);
     setIsLanded(false);
     setAutopilot(false);
     setDestination('MOON');
+    setShowDestModal(false);
     setPlayerMode('ROCKET');
     setThrottle(1.0);
     posRef.current.set(0, 0.2, 0);
@@ -144,6 +178,8 @@ export default function App() {
     earthCarPosRef.current.copy(EARTH_CAR_DEFAULT_POS);
     moonAstroPosRef.current.set(MOON_LANDING_SITE.x + 3.8, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 1.8);
     moonRoverPosRef.current.set(MOON_LANDING_SITE.x + 11.0, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 5.5);
+    marsAstroPosRef.current.set(MARS_LANDING_SITE.x + 3.8, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 1.8);
+    marsRoverPosRef.current.set(MARS_LANDING_SITE.x + 11.0, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 5.5);
     setResetCount((c) => c + 1);
     setStats({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON', stage: 'STANDBY ON EARTH PAD' });
   };
@@ -181,7 +217,7 @@ export default function App() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [isFlying, isLanded, playerMode, autopilot, hudState, destination, isAtMoon]);
+  }, [isFlying, isLanded, playerMode, autopilot, hudState, destination, currentWorld]);
 
   // Flight Physics & Autopilot Loop
   useEffect(() => {
@@ -194,12 +230,13 @@ export default function App() {
 
       if (isFlying && !isLanded) {
         const keys = keysRef.current, pos = posRef.current, vel = velRef.current;
+        const isMars = destination === 'MARS';
         const isMoon = destination === 'MOON';
-        const targetPad = isMoon ? MOON_LANDING_SITE : EARTH_LANDING_SITE;
+        const targetPad = isMars ? MARS_LANDING_SITE : isMoon ? MOON_LANDING_SITE : EARTH_LANDING_SITE;
         const altAbovePad = pos.y - targetPad.y;
         const hDistToPad = Math.hypot(pos.x - targetPad.x, pos.z - targetPad.z);
 
-        const landRocket = (pad: THREE.Vector3, nextDest: 'MOON' | 'EARTH') => {
+        const landRocket = (pad: THREE.Vector3, nextDest: 'MOON' | 'MARS' | 'EARTH') => {
           pos.copy(pad);
           vel.set(0, 0, 0);
           rotRef.current.set(0, 0, 0, 'YXZ');
@@ -214,7 +251,7 @@ export default function App() {
 
         if (autopilot) {
           if (altAbovePad <= 0.8 && hDistToPad <= 24.0) {
-            landRocket(targetPad, isMoon ? 'EARTH' : 'MOON');
+            landRocket(targetPad, isMars || isMoon ? 'EARTH' : 'MOON');
           } else if (altAbovePad < 250 && hDistToPad < 140) {
             quatRef.current.slerp(new THREE.Quaternion(), delta * 4.5);
             pos.x = THREE.MathUtils.lerp(pos.x, targetPad.x, delta * 3.5);
@@ -223,11 +260,11 @@ export default function App() {
             pos.y = Math.max(targetPad.y, pos.y - descentSpeed * delta);
             vel.set(0, -descentSpeed, 0);
           } else {
-            const waypoint = isMoon ? MOON_APPROACH : (pos.y > 800 ? new THREE.Vector3(0, 600, 0) : new THREE.Vector3(0, 200, 0));
+            const waypoint = isMars ? MARS_APPROACH : isMoon ? MOON_APPROACH : (pos.y > 800 ? new THREE.Vector3(0, 600, 0) : new THREE.Vector3(0, 200, 0));
             const toWaypoint = waypoint.clone().sub(pos);
             const dist = toWaypoint.length();
             quatRef.current.slerp(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), toWaypoint.normalize()), delta * 3.5);
-            const cruiseSpeed = dist > 2500 ? 1400 : Math.max(50, dist * 0.45);
+            const cruiseSpeed = dist > 2500 ? (isMars ? 1600 : 1400) : Math.max(50, dist * 0.45);
             vel.lerp(new THREE.Vector3(0, 1, 0).applyQuaternion(quatRef.current).multiplyScalar(cruiseSpeed), delta * 2.8);
             pos.addScaledVector(vel, delta);
           }
@@ -248,7 +285,9 @@ export default function App() {
           if (pos.y > 0.2 && pos.y < 2500 && Math.hypot(pos.x, pos.z) < 3000) vel.y -= 9.8 * (1 - pos.y / 2500) * delta;
           pos.addScaledVector(vel, delta);
 
-          if (isMoon) {
+          if (isMars) {
+            if (pos.distanceTo(MARS_LANDING_SITE) < 32 || (pos.distanceTo(MARS_POSITION) <= MARS_RADIUS + 3 && pos.y > 10000)) landRocket(MARS_LANDING_SITE, 'EARTH');
+          } else if (isMoon) {
             if (pos.distanceTo(MOON_LANDING_SITE) < 28 || (pos.distanceTo(MOON_POSITION) <= MOON_RADIUS + 2 && pos.y > 10000)) landRocket(MOON_LANDING_SITE, 'EARTH');
           } else {
             if (pos.y <= 1.2 && Math.hypot(pos.x, pos.z) < 32) landRocket(EARTH_LANDING_SITE, 'MOON');
@@ -256,19 +295,24 @@ export default function App() {
         }
 
         // Hard ground clamp
-        if ((!isMoon || pos.y < 3000) && pos.y < 0.2) { pos.y = 0.2; if (vel.y < 0) vel.y = 0; }
+        if ((!isMoon && !isMars || pos.y < 3000) && pos.y < 0.2) { pos.y = 0.2; if (vel.y < 0) vel.y = 0; }
         if (isMoon && pos.distanceTo(MOON_POSITION) < MOON_RADIUS + 30 && pos.y < MOON_TOUCHDOWN_Y) { pos.y = MOON_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
+        if (isMars && pos.distanceTo(MARS_POSITION) < MARS_RADIUS + 30 && pos.y < MARS_TOUCHDOWN_Y) { pos.y = MARS_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
 
         rcsActiveRef.current = { pitch: rcsPitch, yaw: rcsYaw };
-        const moonDist = Math.max(0, Math.round(pos.distanceTo(MOON_POSITION) - MOON_RADIUS));
-        const targetDist = isMoon ? moonDist : Math.round(pos.distanceTo(EARTH_LANDING_SITE));
+        const destDist = isMars
+          ? Math.max(0, Math.round(pos.distanceTo(MARS_POSITION) - MARS_RADIUS))
+          : isMoon
+          ? Math.max(0, Math.round(pos.distanceTo(MOON_POSITION) - MOON_RADIUS))
+          : Math.round(pos.distanceTo(EARTH_LANDING_SITE));
+        const targetDist = destDist;
 
         setStats({
           altitude: Math.max(0, Math.round(pos.y)),
           speed: !isFlying && isLanded ? 0 : Math.round(vel.length() * 3.6),
           targetDist,
           destination,
-          stage: getMissionStage(isMoon, pos.y, moonDist, targetDist, isFlying, isLanded),
+          stage: getMissionStage(destination, pos.y, destDist, targetDist, isFlying, isLanded, currentWorld),
         });
       }
       animId = requestAnimationFrame(loop);
@@ -276,7 +320,7 @@ export default function App() {
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isFlying, isLanded, autopilot, throttle, playerMode, destination]);
+  }, [isFlying, isLanded, autopilot, throttle, playerMode, destination, currentWorld]);
 
   const handleDpad = (code: string, pressed: boolean) => {
     keysRef.current[code] = pressed;
@@ -298,8 +342,8 @@ export default function App() {
               autopilot ? 'bg-emerald-950/80 text-emerald-300 border-emerald-400 animate-pulse' :
               'bg-cyan-950/80 text-cyan-300 border-cyan-400'
             }`}>
-              {playerMode === 'ASTRONAUT' ? (isAtMoon ? '🧑‍🚀 ASTRONAUT EVA ON MOON' : '🧑‍🚀 COMMANDER EVA ON EARTH') :
-               playerMode === 'ROVER' ? (isAtMoon ? '🏎️ DRIVING LUNAR ROVER' : '🚙 DRIVING LYNX STORMCHASER') :
+              {playerMode === 'ASTRONAUT' ? (isAtMars ? '🧑‍🚀 ASTRONAUT EVA ON MARS' : isAtMoon ? '🧑‍🚀 ASTRONAUT EVA ON MOON' : '🧑‍🚀 COMMANDER EVA ON EARTH') :
+               playerMode === 'ROVER' ? (isAtMars ? '🏎️ DRIVING MARTIAN ROVER' : isAtMoon ? '🏎️ DRIVING LUNAR ROVER' : '🚙 DRIVING LYNX STORMCHASER') :
                autopilot ? '🤖 AUTOPILOT ACTIVE' : '🚀 ROCKET FLIGHT'}
             </span>
           </div>
@@ -317,15 +361,15 @@ export default function App() {
         <div className="bg-black/80 backdrop-blur-md px-5 py-3 rounded-xl border border-cyan-500/40 text-white font-mono flex items-center gap-6 shadow-2xl">
           {playerMode === 'ROVER' ? (
             <>
-              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMoon ? 'Rover Speed' : 'Car Speed'}</div><div className="text-lg font-bold text-amber-300">{hudState.roverSpeed} km/h</div></div>
+              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car Speed'}</div><div className="text-lg font-bold text-amber-300">{hudState.roverSpeed} km/h</div></div>
               <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">Battery Pack</div><div className="text-lg font-bold text-emerald-300">{isAtMoon ? '98% (4x4 AWD)' : '100% (Cosmodrome EV)'}</div></div>
+              <div><div className="text-[10px] text-gray-400 uppercase">Power Core</div><div className="text-lg font-bold text-emerald-300">{isAtMars ? '100% (Martian RTG)' : isAtMoon ? '98% (4x4 AWD)' : '100% (Cosmodrome EV)'}</div></div>
             </>
           ) : playerMode === 'ASTRONAUT' ? (
             <>
-              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMoon ? 'Suit Oxygen' : 'Life Support'}</div><div className="text-lg font-bold text-cyan-300">100% NOMINAL</div></div>
+              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMars ? 'Mars Life Support' : isAtMoon ? 'Suit Oxygen' : 'Life Support'}</div><div className="text-lg font-bold text-cyan-300">100% NOMINAL</div></div>
               <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMoon ? 'Lunar Gravity' : 'Earth Gravity'}</div><div className="text-lg font-bold text-purple-300">{isAtMoon ? '0.166 G (1.62 m/s²)' : '1.0 G (9.80 m/s²)'}</div></div>
+              <div><div className="text-[10px] text-gray-400 uppercase">Planetary Gravity</div><div className="text-lg font-bold text-purple-300">{isAtMars ? '0.380 G (3.72 m/s²)' : isAtMoon ? '0.166 G (1.62 m/s²)' : '1.0 G (9.80 m/s²)'}</div></div>
             </>
           ) : (
             <>
@@ -333,7 +377,7 @@ export default function App() {
               <div className="h-8 w-[1px] bg-white/20" />
               <div><div className="text-[10px] text-gray-400 uppercase">Velocity</div><div className="text-lg font-bold text-amber-300">{stats.speed.toLocaleString()} km/h</div></div>
               <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">{destination === 'MOON' ? 'Distance to Moon' : 'Distance to Earth'}</div><div className={`text-lg font-bold ${isLanded ? 'text-emerald-400' : 'text-purple-300'}`}>{isLanded ? '0 m (TOUCHDOWN)' : `${stats.targetDist.toLocaleString()} m`}</div></div>
+              <div><div className="text-[10px] text-gray-400 uppercase">{destination === 'MARS' ? 'Distance to Mars' : destination === 'MOON' ? 'Distance to Moon' : 'Distance to Earth'}</div><div className={`text-lg font-bold ${isLanded ? 'text-emerald-400' : 'text-purple-300'}`}>{isLanded ? '0 m (TOUCHDOWN)' : `${stats.targetDist.toLocaleString()} m`}</div></div>
             </>
           )}
         </div>
@@ -348,23 +392,93 @@ export default function App() {
         )}
       </div>
 
+      {/* Destination Selection Modal */}
+      {showDestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-950/95 border-2 border-cyan-500/50 rounded-2xl p-6 max-w-xl w-full shadow-[0_0_50px_rgba(6,182,212,0.35)] text-white text-center">
+            <div className="text-xs font-mono tracking-widest text-cyan-400 uppercase font-bold mb-1">
+              MISSION CONTROL • EXPEDITION TARGET
+            </div>
+            <h2 className="text-2xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-amber-200 to-rose-400 mb-2">
+              WHERE DO YOU WANT TO GO?
+            </h2>
+            <p className="text-xs text-gray-300 mb-6">
+              Commander ZEESU, select target destination for the ZEESU-1 interplanetary flagship:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Moon Card */}
+              <button
+                onClick={() => executeLaunch('MOON')}
+                className="group relative flex flex-col items-center p-5 rounded-xl border-2 border-slate-700 hover:border-cyan-400 bg-gradient-to-b from-slate-900 to-slate-950 hover:from-slate-800 hover:to-slate-900 transition-all transform hover:scale-105 active:scale-95 shadow-lg text-left cursor-pointer"
+              >
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">🌕</div>
+                <div className="text-base font-extrabold text-cyan-300 mb-1">THE MOON</div>
+                <div className="text-[11px] font-mono text-emerald-400 font-semibold mb-2">Luna Base Alpha</div>
+                <div className="text-[10px] font-mono text-gray-400 space-y-0.5 w-full">
+                  <div>• Distance: ~19,500 m</div>
+                  <div>• Gravity: 0.166 G (Floater)</div>
+                  <div>• Vehicle: Lunar Rover 4x4</div>
+                  <div>• Surface: Basalt Maria & Craters</div>
+                </div>
+                <div className="mt-4 w-full py-2 bg-cyan-600/80 group-hover:bg-cyan-500 rounded-lg text-center font-bold text-xs tracking-wider uppercase text-white shadow">
+                  Launch to Moon →
+                </div>
+              </button>
+
+              {/* Mars Card */}
+              <button
+                onClick={() => executeLaunch('MARS')}
+                className="group relative flex flex-col items-center p-5 rounded-xl border-2 border-slate-700 hover:border-rose-500 bg-gradient-to-b from-slate-900 to-slate-950 hover:from-slate-800 hover:to-slate-900 transition-all transform hover:scale-105 active:scale-95 shadow-lg text-left cursor-pointer"
+              >
+                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">🔴</div>
+                <div className="text-base font-extrabold text-rose-400 mb-1">PLANET MARS</div>
+                <div className="text-[11px] font-mono text-amber-400 font-semibold mb-2">Ares Base Alpha</div>
+                <div className="text-[10px] font-mono text-gray-400 space-y-0.5 w-full">
+                  <div>• Distance: ~32,060 m</div>
+                  <div>• Gravity: 0.380 G (Authentic)</div>
+                  <div>• Vehicle: Martian Heavy 4x4</div>
+                  <div>• Surface: Iron Oxide Regolith</div>
+                </div>
+                <div className="mt-4 w-full py-2 bg-gradient-to-r from-red-600 to-amber-600 group-hover:from-red-500 group-hover:to-amber-500 rounded-lg text-center font-bold text-xs tracking-wider uppercase text-white shadow">
+                  Launch to Mars →
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowDestModal(false)}
+              className="mt-5 text-xs text-gray-400 hover:text-white transition cursor-pointer font-mono underline"
+            >
+              Cancel Standby
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Touchdown & Boarding Prompts */}
       <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
         {playerMode === 'ROCKET' && isLanded && (
           <div className={`bg-slate-950/90 backdrop-blur-md px-6 py-4 rounded-2xl border-2 text-center shadow-2xl flex flex-col items-center gap-2.5 ${destination === 'EARTH' ? 'border-emerald-400' : 'border-cyan-400'}`}>
             <div className={`font-extrabold text-sm tracking-wider uppercase flex items-center gap-2 ${destination === 'EARTH' ? 'text-emerald-400' : 'text-cyan-400'}`}>
-              <span>{destination === 'EARTH' ? '🌕' : '🌍'}</span>
-              <span>{destination === 'EARTH' ? 'ROCKET BOARDED ON MOON — TARGET: EARTH' : 'SAFE TOUCHDOWN ON EARTH COSMODROME!'}</span>
+              <span>{isAtMars ? '🔴' : isAtMoon ? '🌕' : '🌍'}</span>
+              <span>
+                {isAtMars ? 'ROCKET BOARDED ON MARS — TARGET: EARTH' :
+                 isAtMoon ? 'ROCKET BOARDED ON MOON — TARGET: EARTH' :
+                 'SAFE TOUCHDOWN ON EARTH COSMODROME!'}
+              </span>
             </div>
             <div className="text-xs text-gray-300 font-mono">
-              {destination === 'EARTH' ? 'Launch off Moon surface to begin return voyage back to Earth!' : 'Interplanetary return complete. Ready to explore Cosmodrome or relaunch!'}
+              {isAtMars ? 'Launch off Mars surface to begin return voyage back to Earth!' :
+               isAtMoon ? 'Launch off Moon surface to begin return voyage back to Earth!' :
+               'Interplanetary return complete. Ready to explore Cosmodrome or relaunch!'}
             </div>
             <div className="flex items-center gap-3 mt-1">
               <button onClick={handleLaunch} className="px-6 py-3 bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-bold text-xs tracking-wider rounded-xl shadow-lg border border-red-300/40 animate-bounce cursor-pointer flex items-center gap-2">
-                <span>🚀</span><span>{destination === 'EARTH' ? 'LAUNCH TO EARTH [Press F]' : 'RELAUNCH TO MOON [Press F]'}</span>
+                <span>🚀</span><span>{destination === 'EARTH' ? 'LAUNCH TO EARTH [Press F]' : 'RELAUNCH [Press F]'}</span>
               </button>
               <button onClick={handleInteraction} className="px-5 py-3 bg-cyan-700/80 hover:bg-cyan-600 text-white font-bold text-xs rounded-xl border border-cyan-400 shadow-md cursor-pointer flex items-center gap-1.5">
-                <span>🧑‍🚀</span><span>STEP OUT {destination === 'EARTH' ? 'ONTO MOON' : 'ONTO EARTH'} [Press E]</span>
+                <span>🧑‍🚀</span><span>STEP OUT ONTO {currentWorld} [Press E]</span>
               </button>
             </div>
           </div>
@@ -372,7 +486,7 @@ export default function App() {
 
         {playerMode === 'ASTRONAUT' && hudState.canEnterRover && (
           <button onClick={handleInteraction} className="bg-amber-950/95 backdrop-blur-md px-6 py-3 rounded-2xl border-2 border-amber-400 text-amber-300 font-bold font-mono text-sm shadow-2xl animate-bounce cursor-pointer flex items-center gap-2">
-            <span>🚙</span><span>PRESS [ E ] TO DRIVE {isAtMoon ? 'LUNAR ROVER' : 'LYNX STORMCHASER'}</span>
+            <span>🚙</span><span>PRESS [ E ] TO DRIVE {isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'LYNX STORMCHASER'}</span>
           </button>
         )}
         {playerMode === 'ASTRONAUT' && hudState.canEnterRocket && (
@@ -387,7 +501,7 @@ export default function App() {
         {((isFlying && !isLanded) || (!isFlying && playerMode !== 'ROCKET')) && (
           <div className="bg-black/75 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center gap-1.5 select-none">
             <div className="text-[10px] font-mono text-cyan-300 font-bold uppercase mb-0.5">
-              {playerMode === 'ASTRONAUT' ? (isAtMoon ? 'Moonwalk' : 'Walk') : playerMode === 'ROVER' ? (isAtMoon ? 'Rover' : 'Car') : 'Rocket'}
+              {playerMode === 'ASTRONAUT' ? (isAtMars ? 'Marswalk' : isAtMoon ? 'Moonwalk' : 'Walk') : playerMode === 'ROVER' ? 'Rover' : 'Rocket'}
             </div>
             <button onMouseDown={() => handleDpad('KeyW', true)} onMouseUp={() => handleDpad('KeyW', false)} className="w-10 h-9 bg-slate-800/90 active:bg-cyan-600 hover:bg-slate-700 text-white font-bold rounded-lg border border-white/20 text-xs shadow flex items-center justify-center">▲</button>
             <div className="flex items-center gap-1.5">
@@ -400,29 +514,29 @@ export default function App() {
 
         <div className="bg-black/75 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 text-xs text-gray-200 flex flex-col gap-1 shadow-xl">
           <div className="font-semibold text-cyan-300">
-            {playerMode === 'ASTRONAUT' ? (isAtMoon ? 'Astronaut Moon EVA Controls:' : 'Commander Earth EVA Controls:') : playerMode === 'ROVER' ? (isAtMoon ? 'Rover Controls:' : 'Cosmodrome Car Controls:') : 'Flight Controls:'}
+            {playerMode === 'ASTRONAUT' ? `Commander ${currentWorld} EVA Controls:` : playerMode === 'ROVER' ? `${isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Cosmodrome Car'} Controls:` : 'Flight Controls:'}
           </div>
           <div className="text-[11px] font-mono text-gray-300 flex flex-col gap-0.5">
             {playerMode === 'ASTRONAUT' ? (
               <>
-                <div>• <strong>[ W / A / S / D ]</strong>: Walk & Turn {isAtMoon ? 'on Moon' : 'at Cosmodrome'}</div>
-                <div>• <strong>[ Space ]</strong>: {isAtMoon ? 'Low-Gravity Lunar Hop' : 'Jump'}</div>
-                <div>• <strong>[ E ]</strong>: Enter {isAtMoon ? 'Rover' : 'Car'} or Board Rocket</div>
+                <div>• <strong>[ W / A / S / D ]</strong>: Walk & Turn on {currentWorld}</div>
+                <div>• <strong>[ Space ]</strong>: {isAtMars ? 'Martian 0.38G Hop' : isAtMoon ? 'Lunar Low-G Hop' : 'Jump'}</div>
+                <div>• <strong>[ E ]</strong>: Drive {isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car'} or Board Rocket</div>
                 <div>• <strong>[ Drag ]</strong>: 360° Mouse Look</div>
               </>
             ) : playerMode === 'ROVER' ? (
               <>
                 <div>• <strong>[ W / S ]</strong>: Drive / Brake</div>
                 <div>• <strong>[ A / D ]</strong>: Steer Left / Right</div>
-                <div>• <strong>[ E ]</strong>: Exit {isAtMoon ? 'Rover' : 'Car'}</div>
+                <div>• <strong>[ E ]</strong>: Exit {isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car'}</div>
                 <div>• <strong>[ Drag ]</strong>: 360° Mouse Look</div>
               </>
             ) : (
               <>
                 <div>• <strong>[ W / A / S / D ]</strong>: Pitch & Steer Rocket</div>
-                <div>• <strong>[ T ]</strong>: Auto-Pilot (Fly & Land on {destination === 'MOON' ? 'Moon' : 'Earth'})</div>
-                <div>• <strong>[ F ]</strong>: Launch Rocket ({destination === 'MOON' ? 'To Moon' : 'To Earth'})</div>
-                <div>• <strong>[ E ]</strong>: Step Out {isAtMoon ? 'onto Moon' : 'onto Earth'}</div>
+                <div>• <strong>[ T ]</strong>: Auto-Pilot (Fly & Land on {destination})</div>
+                <div>• <strong>[ F ]</strong>: Launch Rocket ({destination === 'EARTH' ? 'To Earth' : 'Select Destination'})</div>
+                <div>• <strong>[ E ]</strong>: Step Out onto {currentWorld}</div>
                 <div>• <strong>[ Drag / Wheel ]</strong>: 360° Orbit & Zoom</div>
               </>
             )}
@@ -434,7 +548,7 @@ export default function App() {
       <div className="absolute bottom-6 right-6 z-10 flex items-center gap-3">
         {playerMode === 'ROVER' && (
           <button onClick={handleInteraction} className="px-5 py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-amber-300 shadow-xl cursor-pointer">
-            🚪 EXIT {isAtMoon ? 'ROVER' : 'STORMCHASER'} [Press E]
+            🚪 EXIT {isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'STORMCHASER'} [Press E]
           </button>
         )}
 
@@ -447,7 +561,7 @@ export default function App() {
               'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-600 hover:to-indigo-500 border-purple-300/40 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)]'
             }`}
           >
-            <span>{autopilot ? '🤖' : stats.targetDist < 2500 ? (destination === 'MOON' ? '🌕' : '🌍') : '🎯'}</span>
+            <span>{autopilot ? '🤖' : stats.targetDist < 2500 ? (destination === 'MARS' ? '🔴' : destination === 'MOON' ? '🌕' : '🌍') : '🎯'}</span>
             <span>
               {autopilot
                 ? stats.targetDist < 300 ? `TOUCHDOWN IN PROGRESS ON ${destination}...` : `🤖 AUTOPILOT ON: RETURNING TO ${destination} [Press T]`
@@ -459,10 +573,10 @@ export default function App() {
         {!isFlying && playerMode === 'ROCKET' && (
           <div className="flex items-center gap-2">
             <button onClick={handleLaunch} className="px-6 py-3.5 bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-bold text-sm tracking-wider rounded-xl shadow-[0_0_25px_rgba(255,0,85,0.6)] border border-red-300/40 transform hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-2">
-              <span>🚀</span><span>{destination === 'EARTH' ? 'LAUNCH TO EARTH [Press F]' : 'LAUNCH TO MOON [Press F]'}</span>
+              <span>🚀</span><span>{currentWorld === 'EARTH' ? 'LAUNCH EXPEDITION [Press F]' : 'LAUNCH TO EARTH [Press F]'}</span>
             </button>
             <button onClick={handleInteraction} className="px-5 py-3.5 bg-cyan-700/80 hover:bg-cyan-600 text-white font-bold text-xs rounded-xl border border-cyan-400 shadow-md cursor-pointer flex items-center gap-1.5">
-              <span>🧑‍🚀</span><span>STEP OUT {isAtMoon ? 'ON MOON' : 'ON EARTH'} [Press E]</span>
+              <span>🧑‍🚀</span><span>STEP OUT ONTO {currentWorld} [Press E]</span>
             </button>
           </div>
         )}
@@ -477,7 +591,7 @@ export default function App() {
       {/* 3D WebGL Canvas */}
       <Canvas
         shadows
-        camera={{ position: [0, 16, 62], fov: 45, near: 0.5, far: 75000 }}
+        camera={{ position: [0, 16, 62], fov: 45, near: 0.5, far: 85000 }}
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
       >
         {!isInSpace ? (
@@ -507,8 +621,8 @@ export default function App() {
         <UniversalThirdPersonCamera
           playerMode={playerMode}
           rocketPos={posRef.current}
-          astronautPos={isAtMoon ? moonAstroPosRef.current : earthAstroPosRef.current}
-          roverPos={isAtMoon ? moonRoverPosRef.current : earthCarPosRef.current}
+          astronautPos={isAtMars ? marsAstroPosRef.current : isAtMoon ? moonAstroPosRef.current : earthAstroPosRef.current}
+          roverPos={isAtMars ? marsRoverPosRef.current : isAtMoon ? moonRoverPosRef.current : earthCarPosRef.current}
           resetCount={resetCount}
         />
 
@@ -528,7 +642,7 @@ export default function App() {
           />
 
           <EarthExploration
-            isActive={!isFlying && !isAtMoon && (stats.altitude < 100 || isLanded || !isFlying)}
+            isActive={!isFlying && !isAtMoon && !isAtMars && (stats.altitude < 100 || isLanded || !isFlying)}
             playerMode={playerMode}
             onPlayerModeChange={setPlayerMode}
             onUpdateHUD={setHudState}
@@ -547,6 +661,17 @@ export default function App() {
             roverPosRef={moonRoverPosRef}
             keysRef={keysRef}
             rocketOnMoon={isLanded && isAtMoon}
+          />
+
+          <MarsExploration
+            isLanded={isLanded && isAtMars}
+            playerMode={playerMode}
+            onPlayerModeChange={setPlayerMode}
+            onUpdateHUD={setHudState}
+            astronautPosRef={marsAstroPosRef}
+            roverPosRef={marsRoverPosRef}
+            keysRef={keysRef}
+            rocketOnMars={isLanded && isAtMars}
           />
         </Suspense>
       </Canvas>

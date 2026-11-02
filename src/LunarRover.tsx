@@ -10,7 +10,7 @@ interface LunarRoverProps {
   wheelSpin: number;
   isDriven: boolean;
   headlightsOn?: boolean;
-  theme?: 'MOON' | 'EARTH';
+  theme?: 'MOON' | 'MARS' | 'EARTH';
 }
 
 const WHEELS = [
@@ -34,6 +34,7 @@ export const LunarRover: React.FC<LunarRoverProps> = ({
   const wheelRefs = useRef<{ [key: string]: THREE.Group | null }>({});
   const beaconRef = useRef<THREE.PointLight>(null);
   const isEarth = theme === 'EARTH';
+  const isMars = theme === 'MARS';
 
   useFrame(({ clock }) => {
     if (!groupRef.current) return;
@@ -50,7 +51,7 @@ export const LunarRover: React.FC<LunarRoverProps> = ({
       }
     });
 
-    if (beaconRef.current && isEarth) {
+    if (beaconRef.current && (isEarth || isMars)) {
       beaconRef.current.intensity = isDriven ? 1.5 + Math.sin(clock.elapsedTime * 12) * 1.5 : 0;
     }
   });
@@ -60,21 +61,21 @@ export const LunarRover: React.FC<LunarRoverProps> = ({
       {/* 1. Main Chassis & Trim */}
       <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
         <boxGeometry args={[1.7, 0.22, 3.1]} />
-        <meshStandardMaterial color={isEarth ? '#f8fafc' : '#cbd5e1'} roughness={isEarth ? 0.2 : 0.4} metalness={isEarth ? 0.4 : 0.7} />
+        <meshStandardMaterial color={isMars ? '#b45309' : isEarth ? '#f8fafc' : '#cbd5e1'} roughness={0.3} metalness={0.6} />
       </mesh>
       <mesh position={[0, 0.32, 0]}>
         <boxGeometry args={[1.65, 0.08, 2.95]} />
-        <meshStandardMaterial color={isEarth ? '#0284c7' : '#d97706'} roughness={0.3} metalness={0.6} />
+        <meshStandardMaterial color={isMars ? '#ea580c' : isEarth ? '#0284c7' : '#d97706'} roughness={0.3} metalness={0.6} />
       </mesh>
 
-      {/* Earth Safety Strobe */}
-      {isEarth && (
+      {/* Safety Strobe (Earth & Mars) */}
+      {(isEarth || isMars) && (
         <group position={[0, 1.6, 0]}>
           <mesh>
             <cylinderGeometry args={[0.08, 0.08, 0.12, 12]} />
-            <meshStandardMaterial color="#f59e0b" emissive="#f59e0b" emissiveIntensity={isDriven ? 1.5 : 0.2} />
+            <meshStandardMaterial color={isMars ? '#f97316' : '#f59e0b'} emissive={isMars ? '#f97316' : '#f59e0b'} emissiveIntensity={isDriven ? 1.5 : 0.2} />
           </mesh>
-          <pointLight ref={beaconRef} color="#f59e0b" intensity={0} distance={12} />
+          <pointLight ref={beaconRef} color={isMars ? '#f97316' : '#f59e0b'} intensity={0} distance={12} />
         </group>
       )}
 
