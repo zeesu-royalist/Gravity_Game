@@ -116,9 +116,70 @@ function Loader() {
   );
 }
 
+function PolygonArrowUp() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-7 h-7 sm:w-9 sm:h-9" fill="none">
+      <polygon
+        points="12,3 4,12 9,12 9,21 15,21 15,12 20,12"
+        fill="rgba(255, 255, 255, 0.08)"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PolygonArrowDown() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-7 h-7 sm:w-9 sm:h-9" fill="none">
+      <polygon
+        points="12,21 4,12 9,12 9,3 15,3 15,12 20,12"
+        fill="rgba(255, 255, 255, 0.08)"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PolygonArrowLeft() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-7 h-7 sm:w-9 sm:h-9" fill="none">
+      <polygon
+        points="3,12 12,4 12,9 21,9 21,15 12,15 12,20"
+        fill="rgba(255, 255, 255, 0.08)"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PolygonArrowRight() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-7 h-7 sm:w-9 sm:h-9" fill="none">
+      <polygon
+        points="21,12 12,4 12,9 3,9 3,15 12,15 12,20"
+        fill="rgba(255, 255, 255, 0.08)"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function App() {
   const [destination, setDestination] = useState<'MOON' | 'MARS' | 'EARTH'>('MOON');
   const [showDestModal, setShowDestModal] = useState(false);
+  const [showActionsInfo, setShowActionsInfo] = useState(false);
   const [isFlying, setIsFlying] = useState(false);
   const [isLanded, setIsLanded] = useState(false);
   const [autopilot, setAutopilot] = useState(false);
@@ -490,286 +551,304 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="absolute top-4 left-4 z-10 bg-black/75 backdrop-blur-md px-4 py-3 rounded-xl border border-cyan-500/30 text-white flex items-center gap-4 shadow-2xl">
+      {/* 1. TOP-LEFT: Z-SPACE & Mission Info (Matching Mockup 100%) */}
+      <div className="absolute top-3 sm:top-6 left-3 sm:left-6 z-20 flex flex-col gap-1 select-none pointer-events-auto">
+        <h1 className="text-xl sm:text-3xl md:text-4xl font-extrabold tracking-wider text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+          Z-SPACE
+        </h1>
+        <div className="text-[10px] sm:text-sm text-slate-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] leading-relaxed max-w-[170px] sm:max-w-xs">
+          <div>Powered by Zeesu Royalist</div>
+          <div className="text-[9px] sm:text-xs text-slate-400 mt-0.5">
+            Target: {destination === 'MARS' ? 'Mars Cosmodrome' : destination === 'MOON' ? 'Luna Base Alpha' : 'Earth Cosmodrome'}
+          </div>
+          <div className="text-[9px] sm:text-xs font-mono text-cyan-300 mt-0.5">
+            Status: {isLanded ? 'Surface Touchdown' : isFlying ? (autopilot ? 'Autopilot Flight' : 'Manual Flight') : 'Ready for Launch'}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. TOP-RIGHT: Telemetry Stack (Matching Mockup 100%) */}
+      <div className="absolute top-3 sm:top-6 right-3 sm:right-6 z-20 flex flex-col items-end gap-1.5 sm:gap-2 text-right select-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)] pointer-events-auto">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-extrabold tracking-wider text-cyan-400">Z-SPACE • ZEESU-1</h1>
-            <span className={`px-2 py-0.5 text-[10px] font-mono rounded font-bold border ${
-              playerMode === 'ASTRONAUT' ? 'bg-blue-950/80 text-blue-300 border-blue-400' :
-              playerMode === 'ROVER' ? 'bg-amber-950/80 text-amber-300 border-amber-400' :
-              autopilot ? 'bg-emerald-950/80 text-emerald-300 border-emerald-400 animate-pulse' :
-              'bg-cyan-950/80 text-cyan-300 border-cyan-400'
-            }`}>
-              {playerMode === 'ASTRONAUT' ? (isAtMars ? '🧑‍🚀 ASTRONAUT EVA ON MARS' : isAtMoon ? '🧑‍🚀 ASTRONAUT EVA ON MOON' : '🧑‍🚀 COMMANDER EVA ON EARTH') :
-               playerMode === 'ROVER' ? (isAtMars ? '🏎️ DRIVING MARTIAN ROVER' : isAtMoon ? '🏎️ DRIVING LUNAR ROVER' : '🚙 DRIVING LYNX STORMCHASER') :
-               autopilot ? '🤖 AUTOPILOT ACTIVE' : '🚀 ROCKET FLIGHT'}
-            </span>
+          <div className="text-[10px] sm:text-sm text-slate-300 font-medium">Altitude</div>
+          <div className="text-base sm:text-2xl font-bold text-slate-100 font-mono">
+            {stats.altitude >= 10000 ? `${(stats.altitude / 1000).toFixed(1)} km` : `${stats.altitude.toLocaleString()}`}
           </div>
-          <p className="text-xs text-amber-300 font-medium">Commander ZEESU's Flagship</p>
         </div>
-        <div className="h-8 w-[1px] bg-white/20" />
-        <div className="text-xs font-mono">
-          <div className="text-gray-400 text-[10px]">MISSION STATUS:</div>
-          <div className={`font-bold ${isLanded ? 'text-emerald-400' : isFlying ? 'text-cyan-300' : 'text-gray-300'}`}>{stats.stage}</div>
+        <div>
+          <div className="text-[10px] sm:text-sm text-slate-300 font-medium">Velocity</div>
+          <div className="text-base sm:text-2xl font-bold text-slate-100 font-mono">
+            {stats.speed.toLocaleString()} <span className="text-[10px] sm:text-sm font-normal text-slate-400">km/h</span>
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] sm:text-sm text-slate-300 font-medium">
+            {destination === 'MARS' ? 'Distance to mars' : destination === 'MOON' ? 'Distance to moon' : 'Distance to earth'}
+          </div>
+          <div className="text-base sm:text-2xl font-bold text-slate-100 font-mono">
+            {isLanded ? '0 (TOUCHDOWN)' : `${stats.targetDist.toLocaleString()}`}
+          </div>
         </div>
       </div>
 
-      {/* Telemetry HUD */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2.5">
-        <div className="bg-black/80 backdrop-blur-md px-5 py-3 rounded-xl border border-cyan-500/40 text-white font-mono flex items-center gap-6 shadow-2xl">
-          {playerMode === 'ROVER' ? (
-            <>
-              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car Speed'}</div><div className="text-lg font-bold text-amber-300">{hudState.roverSpeed} km/h</div></div>
-              <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">Power Core</div><div className="text-lg font-bold text-emerald-300">{isAtMars ? '100% (Martian RTG)' : isAtMoon ? '98% (4x4 AWD)' : '100% (Cosmodrome EV)'}</div></div>
-            </>
-          ) : playerMode === 'ASTRONAUT' ? (
-            <>
-              <div><div className="text-[10px] text-gray-400 uppercase">{isAtMars ? 'Mars Life Support' : isAtMoon ? 'Suit Oxygen' : 'Life Support'}</div><div className="text-lg font-bold text-cyan-300">100% NOMINAL</div></div>
-              <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">Planetary Gravity</div><div className="text-lg font-bold text-purple-300">{isAtMars ? '0.380 G (3.72 m/s²)' : isAtMoon ? '0.166 G (1.62 m/s²)' : '1.0 G (9.80 m/s²)'}</div></div>
-            </>
-          ) : (
-            <>
-              <div><div className="text-[10px] text-gray-400 uppercase">Altitude</div><div className="text-lg font-bold text-cyan-300">{stats.altitude >= 10000 ? `${(stats.altitude / 1000).toFixed(1)} km` : `${stats.altitude.toLocaleString()} m`}</div></div>
-              <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">Velocity</div><div className="text-lg font-bold text-amber-300">{stats.speed.toLocaleString()} km/h</div></div>
-              <div className="h-8 w-[1px] bg-white/20" />
-              <div><div className="text-[10px] text-gray-400 uppercase">{destination === 'MARS' ? 'Distance to Mars' : destination === 'MOON' ? 'Distance to Moon' : 'Distance to Earth'}</div><div className={`text-lg font-bold ${isLanded ? 'text-emerald-400' : 'text-purple-300'}`}>{isLanded ? '0 m (TOUCHDOWN)' : `${stats.targetDist.toLocaleString()} m`}</div></div>
-            </>
-          )}
-        </div>
-        {playerMode === 'ROCKET' && isFlying && !isLanded && (
-          <div className="bg-black/75 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 text-white font-mono flex items-center justify-between text-xs shadow-lg">
-            <span className="text-gray-400 text-[10px]">THROTTLE:</span>
-            <div className="w-32 bg-gray-800 rounded-full h-2 overflow-hidden mx-2 border border-gray-700">
-              <div className="bg-gradient-to-r from-amber-500 to-red-500 h-full transition-all duration-150" style={{ width: `${Math.round(throttle * 100)}%` }} />
-            </div>
-            <span className="font-bold text-amber-400">{Math.round(throttle * 100)}%</span>
-          </div>
-        )}
-      </div>
-
-      {/* Destination Selection Modal */}
+      {/* Destination Selection Modal - Ultra-Compact Space HUD Terminal (Mobile-Friendly & Minimal Code) */}
       {showDestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-950/95 border-2 border-cyan-500/50 rounded-2xl p-6 max-w-xl w-full shadow-[0_0_50px_rgba(6,182,212,0.35)] text-white text-center">
-            <div className="text-xs font-mono tracking-widest text-cyan-400 uppercase font-bold mb-1">
-              MISSION CONTROL • EXPEDITION TARGET
-            </div>
-            <h2 className="text-2xl font-black tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-amber-200 to-rose-400 mb-2">
-              WHERE DO YOU WANT TO GO?
-            </h2>
-            <p className="text-xs text-gray-300 mb-6">
-              Commander ZEESU, select target destination for the ZEESU-1 interplanetary flagship:
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Moon Card */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 select-none animate-in fade-in duration-150">
+          <div className="relative w-full max-w-[290px] sm:max-w-md bg-[#050813]/95 border border-cyan-500/30 rounded-xl p-2.5 sm:p-4 shadow-[0_0_30px_rgba(6,182,212,0.15)] text-white">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10 text-[9.5px] sm:text-xs font-mono text-cyan-400 font-bold tracking-wider">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                SELECT DESTINATION
+              </span>
               <button
-                onClick={() => executeLaunch('MOON')}
-                className="group relative flex flex-col items-center p-5 rounded-xl border-2 border-slate-700 hover:border-cyan-400 bg-gradient-to-b from-slate-900 to-slate-950 hover:from-slate-800 hover:to-slate-900 transition-all transform hover:scale-105 active:scale-95 shadow-lg text-left cursor-pointer"
+                onClick={() => setShowDestModal(false)}
+                className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer text-xs"
               >
-                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">🌕</div>
-                <div className="text-base font-extrabold text-cyan-300 mb-1">THE MOON</div>
-                <div className="text-[11px] font-mono text-emerald-400 font-semibold mb-2">Luna Base Alpha</div>
-                <div className="text-[10px] font-mono text-gray-400 space-y-0.5 w-full">
-                  <div>• Distance: ~19,500 m</div>
-                  <div>• Gravity: 0.166 G (Floater)</div>
-                  <div>• Vehicle: Lunar Rover 4x4</div>
-                  <div>• Surface: Basalt Maria & Craters</div>
-                </div>
-                <div className="mt-4 w-full py-2 bg-cyan-600/80 group-hover:bg-cyan-500 rounded-lg text-center font-bold text-xs tracking-wider uppercase text-white shadow">
-                  Launch to Moon →
-                </div>
-              </button>
-
-              {/* Mars Card */}
-              <button
-                onClick={() => executeLaunch('MARS')}
-                className="group relative flex flex-col items-center p-5 rounded-xl border-2 border-slate-700 hover:border-rose-500 bg-gradient-to-b from-slate-900 to-slate-950 hover:from-slate-800 hover:to-slate-900 transition-all transform hover:scale-105 active:scale-95 shadow-lg text-left cursor-pointer"
-              >
-                <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">🔴</div>
-                <div className="text-base font-extrabold text-rose-400 mb-1">PLANET MARS</div>
-                <div className="text-[11px] font-mono text-amber-400 font-semibold mb-2">Ares Base Alpha</div>
-                <div className="text-[10px] font-mono text-gray-400 space-y-0.5 w-full">
-                  <div>• Distance: ~32,060 m</div>
-                  <div>• Gravity: 0.380 G (Authentic)</div>
-                  <div>• Vehicle: Martian Heavy 4x4</div>
-                  <div>• Surface: Iron Oxide Regolith</div>
-                </div>
-                <div className="mt-4 w-full py-2 bg-gradient-to-r from-red-600 to-amber-600 group-hover:from-red-500 group-hover:to-amber-500 rounded-lg text-center font-bold text-xs tracking-wider uppercase text-white shadow">
-                  Launch to Mars →
-                </div>
+                ✕
               </button>
             </div>
 
-            <button
-              onClick={() => setShowDestModal(false)}
-              className="mt-5 text-xs text-gray-400 hover:text-white transition cursor-pointer font-mono underline"
-            >
-              Cancel Standby
-            </button>
+            {/* Compact Side-by-Side Space Cards Grid */}
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
+              {[
+                { id: 'MOON' as const, icon: '🌕', name: 'THE MOON', base: 'Luna Alpha', dist: '19.5k m', g: '0.17 G', vehicle: 'Lunar 4x4', border: 'hover:border-cyan-400', btn: 'bg-cyan-950/70 border-cyan-500/40 text-cyan-300 group-hover:bg-cyan-500 group-hover:text-black' },
+                { id: 'MARS' as const, icon: '🔴', name: 'PLANET MARS', base: 'Ares Alpha', dist: '32.0k m', g: '0.38 G', vehicle: 'Martian 4x4', border: 'hover:border-rose-400', btn: 'bg-rose-950/70 border-rose-500/40 text-rose-300 group-hover:bg-rose-500 group-hover:text-black' }
+              ].map((dest) => (
+                <button
+                  key={dest.id}
+                  onClick={() => executeLaunch(dest.id)}
+                  className={`group flex flex-col justify-between p-2 sm:p-3 rounded-lg border border-slate-700/80 ${dest.border} bg-slate-900/60 hover:bg-slate-900 transition-all text-left cursor-pointer active:scale-95 shadow`}
+                >
+                  <div>
+                    <div className="text-base sm:text-2xl">{dest.icon}</div>
+                    <div className="text-[10.5px] sm:text-sm font-bold text-white tracking-wide mt-0.5">{dest.name}</div>
+                    <div className="text-[8px] sm:text-[10px] text-slate-400 font-mono mb-1.5">{dest.base}</div>
+
+                    <div className="text-[7.5px] sm:text-[9.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
+                      <div className="flex justify-between"><span>DIST:</span><span className="text-slate-200">{dest.dist}</span></div>
+                      <div className="flex justify-between"><span>GRAV:</span><span className="text-emerald-400">{dest.g}</span></div>
+                      <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{dest.vehicle}</span></div>
+                    </div>
+                  </div>
+
+                  <div className={`w-full py-1 sm:py-1.5 rounded border text-center font-mono font-bold text-[8.5px] sm:text-xs tracking-wider uppercase transition ${dest.btn}`}>
+                    Launch →
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="mt-2 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[10px] text-slate-500 font-mono">
+              <span>ZEESU-1 NAV</span>
+              <button onClick={() => setShowDestModal(false)} className="text-slate-400 hover:text-white cursor-pointer underline">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Touchdown & Boarding Prompts */}
-      <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
-        {playerMode === 'ROCKET' && isLanded && (
-          <div className={`bg-slate-950/90 backdrop-blur-md px-6 py-4 rounded-2xl border-2 text-center shadow-2xl flex flex-col items-center gap-2.5 ${destination === 'EARTH' ? 'border-emerald-400' : 'border-cyan-400'}`}>
-            <div className={`font-extrabold text-sm tracking-wider uppercase flex items-center gap-2 ${destination === 'EARTH' ? 'text-emerald-400' : 'text-cyan-400'}`}>
-              <span>{isAtMars ? '🔴' : isAtMoon ? '🌕' : '🌍'}</span>
-              <span>
-                {isAtMars ? 'ROCKET BOARDED ON MARS — TARGET: EARTH' :
-                 isAtMoon ? 'ROCKET BOARDED ON MOON — TARGET: EARTH' :
-                 'SAFE TOUCHDOWN ON EARTH COSMODROME!'}
-              </span>
-            </div>
-            <div className="text-xs text-gray-300 font-mono">
-              {isAtMars ? 'Launch off Mars surface to begin return voyage back to Earth!' :
-               isAtMoon ? 'Launch off Moon surface to begin return voyage back to Earth!' :
-               'Interplanetary return complete. Ready to explore Cosmodrome or relaunch!'}
-            </div>
-            <div className="flex items-center gap-3 mt-1">
-              <button onClick={handleLaunch} className="px-6 py-3 bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-bold text-xs tracking-wider rounded-xl shadow-lg border border-red-300/40 animate-bounce cursor-pointer flex items-center gap-2">
-                <span>🚀</span><span>{destination === 'EARTH' ? 'LAUNCH TO EARTH [Press F]' : 'RELAUNCH [Press F]'}</span>
-              </button>
-              <button onClick={handleInteraction} className="px-5 py-3 bg-cyan-700/80 hover:bg-cyan-600 text-white font-bold text-xs rounded-xl border border-cyan-400 shadow-md cursor-pointer flex items-center gap-1.5">
-                <span>🧑‍🚀</span><span>STEP OUT ONTO {currentWorld} [Press E]</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {playerMode === 'ASTRONAUT' && hudState.canEnterRover && (
-          <button onClick={handleInteraction} className="bg-amber-950/95 backdrop-blur-md px-6 py-3 rounded-2xl border-2 border-amber-400 text-amber-300 font-bold font-mono text-sm shadow-2xl animate-bounce cursor-pointer flex items-center gap-2">
-            <span>🚙</span><span>PRESS [ E ] TO DRIVE {isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'LYNX STORMCHASER'}</span>
+      {/* 3. BOTTOM-LEFT: Vertical Navigation Buttons & Flight Controls Info (Matching Mockup 100%) */}
+      <div className="absolute bottom-3 sm:bottom-6 left-3 sm:left-6 z-20 flex flex-col gap-2 sm:gap-2.5 select-none pointer-events-auto">
+        {/* Vertical Buttons: Up / Down */}
+        <div className="flex flex-col gap-1.5 sm:gap-2">
+          {/* Up Button */}
+          <button
+            onMouseDown={() => handleDpad('KeyW', true)}
+            onMouseUp={() => handleDpad('KeyW', false)}
+            onMouseLeave={() => handleDpad('KeyW', false)}
+            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyW', true); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyW', false); }}
+            className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
+            aria-label="Up / Forward"
+          >
+            <PolygonArrowUp />
           </button>
-        )}
-        {playerMode === 'ASTRONAUT' && hudState.canEnterRocket && (
-          <button onClick={handleInteraction} className="bg-cyan-950/95 backdrop-blur-md px-6 py-3 rounded-2xl border-2 border-cyan-400 text-cyan-300 font-bold font-mono text-sm shadow-2xl animate-bounce cursor-pointer flex items-center gap-2">
-            <span>🚀</span><span>PRESS [ E ] TO BOARD SPACESHIP ROCKET</span>
+
+          {/* Down Button */}
+          <button
+            onMouseDown={() => handleDpad('KeyS', true)}
+            onMouseUp={() => handleDpad('KeyS', false)}
+            onMouseLeave={() => handleDpad('KeyS', false)}
+            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyS', true); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyS', false); }}
+            className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
+            aria-label="Down / Backward"
+          >
+            <PolygonArrowDown />
           </button>
-        )}
-      </div>
+        </div>
 
-      {/* D-Pad & Controls Guide */}
-      <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2.5">
-        {((isFlying && !isLanded) || (!isFlying && playerMode !== 'ROCKET')) && (
-          <div className="bg-black/75 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-2xl flex flex-col items-center gap-1.5 select-none">
-            <div className="text-[10px] font-mono text-cyan-300 font-bold uppercase mb-0.5">
-              {playerMode === 'ASTRONAUT' ? (isAtMars ? 'Marswalk' : isAtMoon ? 'Moonwalk' : 'Walk') : playerMode === 'ROVER' ? 'Rover' : 'Rocket'}
-            </div>
-            <button onMouseDown={() => handleDpad('KeyW', true)} onMouseUp={() => handleDpad('KeyW', false)} className="w-10 h-9 bg-slate-800/90 active:bg-cyan-600 hover:bg-slate-700 text-white font-bold rounded-lg border border-white/20 text-xs shadow flex items-center justify-center">▲</button>
-            <div className="flex items-center gap-1.5">
-              <button onMouseDown={() => handleDpad('KeyA', true)} onMouseUp={() => handleDpad('KeyA', false)} className="w-10 h-9 bg-slate-800/90 active:bg-cyan-600 hover:bg-slate-700 text-white font-bold rounded-lg border border-white/20 text-xs shadow flex items-center justify-center">◀</button>
-              <button onMouseDown={() => handleDpad('KeyS', true)} onMouseUp={() => handleDpad('KeyS', false)} className="w-10 h-9 bg-slate-800/90 active:bg-cyan-600 hover:bg-slate-700 text-white font-bold rounded-lg border border-white/20 text-xs shadow flex items-center justify-center">▼</button>
-              <button onMouseDown={() => handleDpad('KeyD', true)} onMouseUp={() => handleDpad('KeyD', false)} className="w-10 h-9 bg-slate-800/90 active:bg-cyan-600 hover:bg-slate-700 text-white font-bold rounded-lg border border-white/20 text-xs shadow flex items-center justify-center">▶</button>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-black/75 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/10 text-xs text-gray-200 flex flex-col gap-1 shadow-xl">
-          <div className="font-semibold text-cyan-300">
-            {playerMode === 'ASTRONAUT' ? `Commander ${currentWorld} EVA Controls:` : playerMode === 'ROVER' ? `${isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Cosmodrome Car'} Controls:` : 'Flight Controls:'}
-          </div>
-          <div className="text-[11px] font-mono text-gray-300 flex flex-col gap-0.5">
-            {playerMode === 'ASTRONAUT' ? (
-              <>
-                <div>• <strong>[ W / A / S / D ]</strong>: Walk & Turn on {currentWorld}</div>
-                <div>• <strong>[ Space ]</strong>: {isAtMars ? 'Martian 0.38G Hop' : isAtMoon ? 'Lunar Low-G Hop' : 'Jump'}</div>
-                {isAtMars && <div>• <strong>[ Q ]</strong>: <span className="text-cyan-400 font-bold">Fire Plasma Rifle</span></div>}
-                <div>• <strong>[ E ]</strong>: Drive {isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car'} or Board Rocket</div>
-                <div>• <strong>[ Drag ]</strong>: 360° Mouse Look</div>
-              </>
-            ) : playerMode === 'ROVER' ? (
-              <>
-                <div>• <strong>[ W / S ]</strong>: Drive / Brake</div>
-                <div>• <strong>[ A / D ]</strong>: Steer Left / Right</div>
-                <div>• <strong>[ E ]</strong>: Exit {isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car'}</div>
-                <div>• <strong>[ Drag ]</strong>: 360° Mouse Look</div>
-              </>
-            ) : (
-              <>
-                <div>• <strong>[ W / A / S / D ]</strong>: Pitch & Steer Rocket</div>
-                <div>• <strong>[ T ]</strong>: Auto-Pilot (Fly & Land on {destination})</div>
-                <div>• <strong>[ F ]</strong>: Launch Rocket ({destination === 'EARTH' ? 'To Earth' : 'Select Destination'})</div>
-                <div>• <strong>[ E ]</strong>: Step Out onto {currentWorld}</div>
-                <div>• <strong>[ Drag / Wheel ]</strong>: 360° Orbit & Zoom</div>
-              </>
-            )}
+        {/* Flight Controls Information Text (Matching Mockup 100%) */}
+        <div className="text-[10px] sm:text-xs text-slate-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] max-w-[155px] sm:max-w-xs leading-relaxed">
+          <div className="font-semibold text-slate-200 mb-0.5">Flight controls:</div>
+          <div className="text-[9px] sm:text-[11px] text-slate-300/90 font-mono space-y-0.5">
+            <div>• [ W / S ] : Move Forward / Back</div>
+            <div>• [ A / D ] : Steer Left / Right</div>
+            <div>• [ Space ] : {isAtMars ? 'Martian Hop' : isAtMoon ? 'Moon Hop' : 'Jump'}</div>
+            <div className="hidden sm:block">• [ Drag ] : 360° Orbit View</div>
           </div>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="absolute bottom-6 right-6 z-10 flex items-center gap-3">
-        {playerMode === 'ASTRONAUT' && isAtMars && (
-          <button
-            onMouseDown={() => handleDpad('KeyQ', true)}
-            onMouseUp={() => handleDpad('KeyQ', false)}
-            onMouseLeave={() => handleDpad('KeyQ', false)}
-            onTouchStart={() => handleDpad('KeyQ', true)}
-            onTouchEnd={() => handleDpad('KeyQ', false)}
-            className="px-5 py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:scale-95 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.6)] cursor-pointer flex items-center gap-2 select-none"
-          >
-            <span>🔫</span>
-            <span>FIRE PLASMA RIFLE [Hold Q]</span>
-          </button>
-        )}
+      {/* 4. BOTTOM-RIGHT: Actions Text, Vertical Circular Buttons (F, E, Q + T, R, i) & Horizontal Steering Buttons */}
+      <div className="absolute bottom-3 sm:bottom-6 right-3 sm:right-6 z-20 flex flex-col items-end gap-2 sm:gap-3 select-none pointer-events-auto">
+        {/* Circular Action Buttons Cluster: i above R, R above F, F, E, Q column in a straight vertical line */}
+        <div className="relative flex flex-col items-center">
+          {/* Actions Guide Popover (opens to the left of the button cluster) */}
+          {showActionsInfo && (
+            <div className="absolute right-full mr-2 sm:mr-3 top-0 bg-slate-950/95 backdrop-blur-xl border border-cyan-400/70 rounded-2xl p-3 text-right shadow-[0_8px_32px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-150 w-52 sm:w-60 z-40">
+              <div className="flex items-center justify-between mb-1.5 border-b border-white/10 pb-1">
+                <button
+                  onClick={() => setShowActionsInfo(false)}
+                  onTouchEnd={(e) => { e.preventDefault(); setShowActionsInfo(false); }}
+                  className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+                <span className="text-[10px] sm:text-xs text-cyan-300 font-bold uppercase tracking-wide">
+                  Action Guide
+                </span>
+              </div>
+              <div className="text-[10px] sm:text-xs text-slate-300 font-semibold mb-1">
+                And all other thing like,
+              </div>
+              <div className="text-[9px] sm:text-[11px] text-slate-200 font-mono space-y-1 leading-relaxed text-right">
+                <div>• <strong>F</strong> for Fly / launch</div>
+                <div>• <strong>E</strong> for enter in vehical</div>
+                <div>• <strong>Q</strong> for fire gun</div>
+                <div className="text-slate-400 pt-0.5">• <strong>T</strong> for Autopilot • <strong>R</strong> for Reset</div>
+              </div>
+            </div>
+          )}
 
-        {playerMode === 'ASTRONAUT' && (hudState.canEnterRover || hudState.canEnterRocket) && (
+          {/* Small Circle (i): Info Button directly above R in straight vertical alignment */}
           <button
-            onClick={handleInteraction}
-            className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-emerald-300 shadow-xl cursor-pointer flex items-center gap-2"
-          >
-            <span>{hudState.canEnterRover ? '🏎️' : '🚀'}</span>
-            <span>{hudState.canEnterRover ? `DRIVE ${isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'CAR'} [Press E]` : `BOARD ROCKET [Press E]`}</span>
-          </button>
-        )}
-
-        {playerMode === 'ROVER' && (
-          <button onClick={handleInteraction} className="px-5 py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-amber-300 shadow-xl cursor-pointer">
-            🚪 EXIT {isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'STORMCHASER'} [Press E]
-          </button>
-        )}
-
-        {playerMode === 'ROCKET' && isFlying && !isLanded && (
-          <button
-            onClick={() => setAutopilot((p) => !p)}
-            className={`px-5 py-3.5 text-xs font-bold font-mono tracking-wider rounded-xl border transition-all cursor-pointer shadow-2xl flex items-center gap-2 ${
-              autopilot ? 'bg-emerald-600 border-emerald-300 text-white shadow-[0_0_25px_rgba(16,185,129,0.8)] animate-pulse' :
-              stats.targetDist < 2500 ? 'bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-500 hover:to-rose-500 border-amber-300 text-white shadow-[0_0_25px_rgba(245,158,11,0.7)] animate-bounce' :
-              'bg-gradient-to-r from-purple-700 to-indigo-600 hover:from-purple-600 hover:to-indigo-500 border-purple-300/40 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)]'
+            onClick={() => setShowActionsInfo((p) => !p)}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              setShowActionsInfo((p) => !p);
+            }}
+            className={`w-6 h-6 sm:w-7 sm:h-7 mb-1.5 sm:mb-2 rounded-full border-1.5 sm:border-2 bg-black/50 hover:bg-black/70 active:scale-90 backdrop-blur-md shadow-md flex items-center justify-center cursor-pointer transition-all select-none touch-manipulation font-serif italic font-bold text-[10px] sm:text-xs ${
+              showActionsInfo
+                ? 'border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
+                : 'border-slate-500/80 text-slate-300 hover:border-cyan-400 hover:text-white'
             }`}
+            title="Toggle Controls Guide (i)"
+            aria-label="Toggle Controls Info"
           >
-            <span>{autopilot ? '🤖' : stats.targetDist < 2500 ? (destination === 'MARS' ? '🔴' : destination === 'MOON' ? '🌕' : '🌍') : '🎯'}</span>
-            <span>
-              {autopilot
-                ? stats.targetDist < 300 ? `TOUCHDOWN IN PROGRESS ON ${destination}...` : `🤖 AUTOPILOT ON: RETURNING TO ${destination} [Press T]`
-                : stats.targetDist < 2500 ? `INITIATE SOFT ${destination} LANDING [Press T]` : `ACTIVATE AUTOPILOT TO ${destination} [Press T]`}
-            </span>
+            i
           </button>
-        )}
 
-        {!isFlying && playerMode === 'ROCKET' && (
-          <div className="flex items-center gap-2">
-            <button onClick={handleLaunch} className="px-6 py-3.5 bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-bold text-sm tracking-wider rounded-xl shadow-[0_0_25px_rgba(255,0,85,0.6)] border border-red-300/40 transform hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-2">
-              <span>🚀</span><span>{currentWorld === 'EARTH' ? 'LAUNCH EXPEDITION [Press F]' : 'LAUNCH TO EARTH [Press F]'}</span>
+          {/* Small Circle R: Reset Mission directly above F */}
+          <button
+            onClick={handleReset}
+            onTouchStart={(e) => { e.preventDefault(); handleReset(); }}
+            className="w-8 h-8 sm:w-10 sm:h-10 mb-1.5 sm:mb-2 rounded-full border-2 border-slate-700/80 hover:border-red-400 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans text-slate-300 hover:text-red-300 flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+            title="Reset Mission [R]"
+            aria-label="R for Reset Mission"
+          >
+            R
+          </button>
+
+          {/* Main Action Buttons Column: F, E, Q */}
+          <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+            {/* Circle F: Fly / Launch */}
+            <button
+              onClick={handleLaunch}
+              onTouchStart={(e) => { e.preventDefault(); handleLaunch(); }}
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${
+                !isFlying && playerMode === 'ROCKET'
+                  ? 'border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.6)] animate-pulse'
+                  : 'border-slate-700/80 hover:border-cyan-400'
+              }`}
+              aria-label="F for Fly / Launch"
+              title="F for Fly / Launch"
+            >
+              F
             </button>
-            <button onClick={handleInteraction} className="px-5 py-3.5 bg-cyan-700/80 hover:bg-cyan-600 text-white font-bold text-xs rounded-xl border border-cyan-400 shadow-md cursor-pointer flex items-center gap-1.5">
-              <span>🧑‍🚀</span><span>STEP OUT ONTO {currentWorld} [Press E]</span>
+
+            {/* Circle E: Enter / Exit Vehicle */}
+            <button
+              onClick={handleInteraction}
+              onTouchStart={(e) => { e.preventDefault(); handleInteraction(); }}
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${
+                hudState.canEnterRover || hudState.canEnterRocket || (isLanded && playerMode === 'ROCKET')
+                  ? 'border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.6)] animate-pulse'
+                  : 'border-slate-700/80 hover:border-cyan-400'
+              }`}
+              aria-label="E for Enter vehicle"
+              title="E for Enter vehicle"
+            >
+              E
+            </button>
+
+            {/* Circle Q: Fire Gun */}
+            <button
+              onMouseDown={() => handleDpad('KeyQ', true)}
+              onMouseUp={() => handleDpad('KeyQ', false)}
+              onMouseLeave={() => handleDpad('KeyQ', false)}
+              onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyQ', true); }}
+              onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyQ', false); }}
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${
+                isAtMars && playerMode === 'ASTRONAUT'
+                  ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
+                  : 'border-slate-700/80 hover:border-cyan-400'
+              }`}
+              aria-label="Q for Fire gun"
+              title="Q for Fire gun"
+            >
+              Q
             </button>
           </div>
-        )}
 
-        {isFlying && (
-          <button onClick={handleReset} className="px-4 py-3 bg-slate-800/90 hover:bg-slate-700 text-white font-bold text-xs tracking-wider rounded-xl border border-white/20 shadow-lg cursor-pointer transition-all flex items-center gap-2">
-            <span>🔄</span><span>RESET TO EARTH [Press R]</span>
+          {/* Small Circle T: Autopilot positioned to the left between E & Q (Matching Mockup exactly) */}
+          <button
+            onClick={() => setAutopilot((p) => !p)}
+            onTouchStart={(e) => { e.preventDefault(); setAutopilot((p) => !p); }}
+            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] ${
+              autopilot
+                ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
+                : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
+            }`}
+            title="Autopilot Cruise [T]"
+            aria-label="T for Autopilot Cruise"
+          >
+            T
           </button>
-        )}
+        </div>
+
+        {/* Horizontal Navigation Buttons: Left / Right (side-by-side) */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Left Button */}
+          <button
+            onMouseDown={() => handleDpad('KeyA', true)}
+            onMouseUp={() => handleDpad('KeyA', false)}
+            onMouseLeave={() => handleDpad('KeyA', false)}
+            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyA', true); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyA', false); }}
+            className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
+            aria-label="Steer Left"
+          >
+            <PolygonArrowLeft />
+          </button>
+
+          {/* Right Button */}
+          <button
+            onMouseDown={() => handleDpad('KeyD', true)}
+            onMouseUp={() => handleDpad('KeyD', false)}
+            onMouseLeave={() => handleDpad('KeyD', false)}
+            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyD', true); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyD', false); }}
+            className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
+            aria-label="Steer Right"
+          >
+            <PolygonArrowRight />
+          </button>
+        </div>
       </div>
 
       {/* 3D WebGL Canvas */}
