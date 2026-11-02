@@ -252,6 +252,9 @@ export default function App() {
   const quatRef = useRef(new THREE.Quaternion());
   const rcsActiveRef = useRef({ pitch: 0, yaw: 0 });
   const keysRef = useRef<{ [key: string]: boolean }>({});
+  const shootingHoldRef = useRef(false);
+  const shootTimerRef = useRef<any>(null);
+  const lastActionTime = useRef(0);
 
   const earthAstroPosRef = useRef(EARTH_ASTRONAUT_DEFAULT_POS.clone());
   const earthCarPosRef = useRef(EARTH_CAR_DEFAULT_POS.clone());
@@ -321,7 +324,7 @@ export default function App() {
 
     setAsteroidAlert({
       type: 'BLAST',
-      message: `CRITICAL IMPACT WITH DEEP-SPACE ASTEROID (${Math.round(radius)}m)!\n25% LETHAL BLAST PROBABILITY TRIGGERED — SHIP DESTROYED!\nINITIATING EMERGENCY RESET PROTOCOL BACK TO EARTH...`,
+      message: `Impact (${Math.round(radius)}m) • Emergency reset`,
     });
 
     if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
@@ -337,7 +340,7 @@ export default function App() {
 
     setAsteroidAlert({
       type: 'DEFLECTION',
-      message: `ASTEROID GRAVITATIONAL COLLISION DEFLECTED!\n75% PROBABILITY TRIGGERED: SHIELD ABSORPTION 100% NOMINAL!\nCONTINUING MARS EXPEDITION SAFELY.`,
+      message: 'Shield absorbed collision • 100% nominal',
     });
 
     if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
@@ -391,9 +394,16 @@ export default function App() {
     };
     const onBlur = () => {
       keysRef.current = {};
+      shootingHoldRef.current = false;
+      if (shootTimerRef.current) {
+        clearTimeout(shootTimerRef.current);
+        shootTimerRef.current = null;
+      }
     };
     const onPointerUp = () => {
-      keysRef.current['KeyQ'] = false;
+      if (!shootingHoldRef.current && !shootTimerRef.current) {
+        keysRef.current['KeyQ'] = false;
+      }
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -492,8 +502,8 @@ export default function App() {
         const destDist = isMars
           ? Math.max(0, Math.round(pos.distanceTo(MARS_POSITION) - MARS_RADIUS))
           : isMoon
-          ? Math.max(0, Math.round(pos.distanceTo(MOON_POSITION) - MOON_RADIUS))
-          : Math.round(pos.distanceTo(EARTH_LANDING_SITE));
+            ? Math.max(0, Math.round(pos.distanceTo(MOON_POSITION) - MOON_RADIUS))
+            : Math.round(pos.distanceTo(EARTH_LANDING_SITE));
         const targetDist = destDist;
 
         setStats({
@@ -516,6 +526,68 @@ export default function App() {
     if (pressed && autopilot) setAutopilot(false);
   };
 
+  // Mobile & Touch Input Engine: Instant One-Touch Response + Duplicate Event Deduplication
+  const triggerAction = (fn: () => void) => {
+    const now = performance.now();
+    if (now - lastActionTime.current < 200) return;
+    lastActionTime.current = now;
+    fn();
+  };
+
+  const actionProps = (fn: () => void) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      triggerAction(fn);
+    },
+    onClick: (e: React.MouseEvent) => {
+      e.preventDefault();
+      triggerAction(fn);
+    },
+  });
+
+  const dpadProps = (code: string) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      handleDpad(code, true);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      handleDpad(code, false);
+    },
+    onPointerCancel: () => handleDpad(code, false),
+  });
+
+  const fireGun = (pressed: boolean) => {
+    shootingHoldRef.current = pressed;
+    if (pressed) {
+      keysRef.current['KeyQ'] = true;
+      if (shootTimerRef.current) clearTimeout(shootTimerRef.current);
+      // 180ms pulse guarantees single tap registers a plasma shot in 3D loop
+      shootTimerRef.current = setTimeout(() => {
+        if (!shootingHoldRef.current) keysRef.current['KeyQ'] = false;
+        shootTimerRef.current = null;
+      }, 180);
+    } else {
+      if (!shootTimerRef.current) keysRef.current['KeyQ'] = false;
+    }
+  };
+
+  const qProps = {
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      fireGun(true);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      fireGun(false);
+    },
+    onPointerCancel: () => fireGun(false),
+  };
+
   const isInSpace = stats.altitude > 3500;
 
   return (
@@ -530,21 +602,19 @@ export default function App() {
         <div className="pointer-events-none fixed inset-0 z-30 shadow-[inset_0_0_160px_rgba(255,0,0,0.9)] bg-red-600/20 border-8 border-red-500 animate-pulse" />
       )}
 
-      {/* Asteroid Alert Banner (Blast or Deflection) */}
+      {/* Asteroid Alert Banner (Blast or Deflection) - Minimal & Mobile-Responsive */}
       {asteroidAlert && (
-        <div className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
-          <div className={`px-6 py-4 rounded-2xl border-2 backdrop-blur-xl shadow-2xl text-center max-w-xl ${
-            asteroidAlert.type === 'BLAST'
-              ? 'bg-red-950/95 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.8)] text-red-100'
-              : 'bg-emerald-950/95 border-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.7)] text-emerald-100'
-          }`}>
-            <div className={`text-sm font-black tracking-wider uppercase flex items-center justify-center gap-2 mb-1.5 ${
-              asteroidAlert.type === 'BLAST' ? 'text-red-400 animate-pulse' : 'text-emerald-300'
+        <div className="pointer-events-none fixed top-12 sm:top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center animate-in fade-in zoom-in-95 duration-150 px-2 w-auto max-w-[280px] sm:max-w-md">
+          <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl border backdrop-blur-md shadow-xl text-center ${asteroidAlert.type === 'BLAST'
+              ? 'bg-red-950/90 border-red-500/80 shadow-[0_0_20px_rgba(239,68,68,0.5)] text-red-100'
+              : 'bg-emerald-950/90 border-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.5)] text-emerald-100'
             }`}>
+            <div className={`text-[10px] sm:text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-1.5 ${asteroidAlert.type === 'BLAST' ? 'text-red-400 animate-pulse' : 'text-emerald-300'
+              }`}>
               <span>{asteroidAlert.type === 'BLAST' ? '💥' : '🛡️'}</span>
-              <span>{asteroidAlert.type === 'BLAST' ? 'CRITICAL IMPACT — 25% LETHAL BLAST!' : 'COLLISION DEFLECTION — 75% SURVIVED!'}</span>
+              <span>{asteroidAlert.type === 'BLAST' ? 'CRITICAL IMPACT' : 'ASTEROID DEFLECTED'}</span>
             </div>
-            <div className="text-xs font-mono whitespace-pre-line text-gray-200 font-semibold leading-relaxed">
+            <div className="text-[9px] sm:text-[11px] font-mono text-slate-200 mt-0.5">
               {asteroidAlert.message}
             </div>
           </div>
@@ -656,11 +726,7 @@ export default function App() {
         <div className="flex flex-col gap-1.5 sm:gap-2">
           {/* Up Button */}
           <button
-            onMouseDown={() => handleDpad('KeyW', true)}
-            onMouseUp={() => handleDpad('KeyW', false)}
-            onMouseLeave={() => handleDpad('KeyW', false)}
-            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyW', true); }}
-            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyW', false); }}
+            {...dpadProps('KeyW')}
             className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
             aria-label="Up / Forward"
           >
@@ -669,11 +735,7 @@ export default function App() {
 
           {/* Down Button */}
           <button
-            onMouseDown={() => handleDpad('KeyS', true)}
-            onMouseUp={() => handleDpad('KeyS', false)}
-            onMouseLeave={() => handleDpad('KeyS', false)}
-            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyS', true); }}
-            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyS', false); }}
+            {...dpadProps('KeyS')}
             className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
             aria-label="Down / Backward"
           >
@@ -682,9 +744,9 @@ export default function App() {
         </div>
 
         {/* Flight Controls Information Text (Matching Mockup 100%) */}
-        <div className="text-[10px] sm:text-xs text-slate-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] max-w-[155px] sm:max-w-xs leading-relaxed">
+        <div className="text-[10px] sm:text-xs text-slate-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] leading-relaxed whitespace-nowrap">
           <div className="font-semibold text-slate-200 mb-0.5">Flight controls:</div>
-          <div className="text-[9px] sm:text-[11px] text-slate-300/90 font-mono space-y-0.5">
+          <div className="text-[8.5px] sm:text-[11px] text-slate-300/90 font-mono space-y-0.5 whitespace-nowrap">
             <div>• [ W / S ] : Move Forward / Back</div>
             <div>• [ A / D ] : Steer Left / Right</div>
             <div>• [ Space ] : {isAtMars ? 'Martian Hop' : isAtMoon ? 'Moon Hop' : 'Jump'}</div>
@@ -702,8 +764,7 @@ export default function App() {
             <div className="absolute right-full mr-2 sm:mr-3 top-0 bg-slate-950/95 backdrop-blur-xl border border-cyan-400/70 rounded-2xl p-3 text-right shadow-[0_8px_32px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-150 w-52 sm:w-60 z-40">
               <div className="flex items-center justify-between mb-1.5 border-b border-white/10 pb-1">
                 <button
-                  onClick={() => setShowActionsInfo(false)}
-                  onTouchEnd={(e) => { e.preventDefault(); setShowActionsInfo(false); }}
+                  {...actionProps(() => setShowActionsInfo(false))}
                   className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer"
                   aria-label="Close"
                 >
@@ -727,16 +788,11 @@ export default function App() {
 
           {/* Small Circle (i): Info Button directly above R in straight vertical alignment */}
           <button
-            onClick={() => setShowActionsInfo((p) => !p)}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              setShowActionsInfo((p) => !p);
-            }}
-            className={`w-6 h-6 sm:w-7 sm:h-7 mb-1.5 sm:mb-2 rounded-full border-1.5 sm:border-2 bg-black/50 hover:bg-black/70 active:scale-90 backdrop-blur-md shadow-md flex items-center justify-center cursor-pointer transition-all select-none touch-manipulation font-serif italic font-bold text-[10px] sm:text-xs ${
-              showActionsInfo
+            {...actionProps(() => setShowActionsInfo((p) => !p))}
+            className={`w-6 h-6 sm:w-7 sm:h-7 mb-1.5 sm:mb-2 rounded-full border-1.5 sm:border-2 bg-black/50 hover:bg-black/70 active:scale-90 backdrop-blur-md shadow-md flex items-center justify-center cursor-pointer transition-all select-none touch-manipulation font-serif italic font-bold text-[10px] sm:text-xs ${showActionsInfo
                 ? 'border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
                 : 'border-slate-500/80 text-slate-300 hover:border-cyan-400 hover:text-white'
-            }`}
+              }`}
             title="Toggle Controls Guide (i)"
             aria-label="Toggle Controls Info"
           >
@@ -745,8 +801,7 @@ export default function App() {
 
           {/* Small Circle R: Reset Mission directly above F */}
           <button
-            onClick={handleReset}
-            onTouchStart={(e) => { e.preventDefault(); handleReset(); }}
+            {...actionProps(handleReset)}
             className="w-8 h-8 sm:w-10 sm:h-10 mb-1.5 sm:mb-2 rounded-full border-2 border-slate-700/80 hover:border-red-400 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans text-slate-300 hover:text-red-300 flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
             title="Reset Mission [R]"
             aria-label="R for Reset Mission"
@@ -758,13 +813,11 @@ export default function App() {
           <div className="flex flex-col items-center gap-1.5 sm:gap-2">
             {/* Circle F: Fly / Launch */}
             <button
-              onClick={handleLaunch}
-              onTouchStart={(e) => { e.preventDefault(); handleLaunch(); }}
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${
-                !isFlying && playerMode === 'ROCKET'
+              {...actionProps(handleLaunch)}
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${!isFlying && playerMode === 'ROCKET'
                   ? 'border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.6)] animate-pulse'
                   : 'border-slate-700/80 hover:border-cyan-400'
-              }`}
+                }`}
               aria-label="F for Fly / Launch"
               title="F for Fly / Launch"
             >
@@ -773,13 +826,11 @@ export default function App() {
 
             {/* Circle E: Enter / Exit Vehicle */}
             <button
-              onClick={handleInteraction}
-              onTouchStart={(e) => { e.preventDefault(); handleInteraction(); }}
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${
-                hudState.canEnterRover || hudState.canEnterRocket || (isLanded && playerMode === 'ROCKET')
+              {...actionProps(handleInteraction)}
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${hudState.canEnterRover || hudState.canEnterRocket || (isLanded && playerMode === 'ROCKET')
                   ? 'border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.6)] animate-pulse'
                   : 'border-slate-700/80 hover:border-cyan-400'
-              }`}
+                }`}
               aria-label="E for Enter vehicle"
               title="E for Enter vehicle"
             >
@@ -788,16 +839,11 @@ export default function App() {
 
             {/* Circle Q: Fire Gun */}
             <button
-              onMouseDown={() => handleDpad('KeyQ', true)}
-              onMouseUp={() => handleDpad('KeyQ', false)}
-              onMouseLeave={() => handleDpad('KeyQ', false)}
-              onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyQ', true); }}
-              onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyQ', false); }}
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${
-                isAtMars && playerMode === 'ASTRONAUT'
+              {...qProps}
+              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${isAtMars && playerMode === 'ASTRONAUT'
                   ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
                   : 'border-slate-700/80 hover:border-cyan-400'
-              }`}
+                }`}
               aria-label="Q for Fire gun"
               title="Q for Fire gun"
             >
@@ -807,13 +853,11 @@ export default function App() {
 
           {/* Small Circle T: Autopilot positioned to the left between E & Q (Matching Mockup exactly) */}
           <button
-            onClick={() => setAutopilot((p) => !p)}
-            onTouchStart={(e) => { e.preventDefault(); setAutopilot((p) => !p); }}
-            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] ${
-              autopilot
+            {...actionProps(() => setAutopilot((p) => !p))}
+            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] ${autopilot
                 ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
                 : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
-            }`}
+              }`}
             title="Autopilot Cruise [T]"
             aria-label="T for Autopilot Cruise"
           >
@@ -825,11 +869,7 @@ export default function App() {
         <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Left Button */}
           <button
-            onMouseDown={() => handleDpad('KeyA', true)}
-            onMouseUp={() => handleDpad('KeyA', false)}
-            onMouseLeave={() => handleDpad('KeyA', false)}
-            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyA', true); }}
-            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyA', false); }}
+            {...dpadProps('KeyA')}
             className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
             aria-label="Steer Left"
           >
@@ -838,11 +878,7 @@ export default function App() {
 
           {/* Right Button */}
           <button
-            onMouseDown={() => handleDpad('KeyD', true)}
-            onMouseUp={() => handleDpad('KeyD', false)}
-            onMouseLeave={() => handleDpad('KeyD', false)}
-            onTouchStart={(e) => { e.preventDefault(); handleDpad('KeyD', true); }}
-            onTouchEnd={(e) => { e.preventDefault(); handleDpad('KeyD', false); }}
+            {...dpadProps('KeyD')}
             className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl border-2 sm:border-[2.5px] border-slate-700/80 bg-black/40 hover:bg-black/60 hover:border-cyan-400 active:border-cyan-300 active:bg-cyan-900/40 text-slate-200 hover:text-white backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none active:scale-95"
             aria-label="Steer Right"
           >

@@ -39,7 +39,7 @@ export function playAsteroidExplosion() {
     g2.gain.exponentialRampToValueAtTime(0.005, t + 0.8);
     noise.connect(filter); filter.connect(g2); g2.connect(ctx.destination);
     noise.start(t);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 export function playDeflectionSound() {
@@ -53,7 +53,7 @@ export function playDeflectionSound() {
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
     osc.connect(gain); gain.connect(ctx.destination);
     osc.start(t); osc.stop(t + 0.3);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 // Procedural high-contrast regolith crater texture (NASA-style celestial rock)
