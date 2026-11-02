@@ -4,6 +4,8 @@ import { OrbitControls, Html, useProgress, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 useGLTF.preload('/models/gastaroid_queen.glb');
+useGLTF.preload('/models/lunar_rover.glb');
+useGLTF.preload('/models/moon_rover.glb');
 import { RealisticLandscape } from './RealisticLandscape';
 import { SpaceEnvironment, MOON_POSITION, MOON_RADIUS, MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 import { MoonExploration, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './MoonExploration';
