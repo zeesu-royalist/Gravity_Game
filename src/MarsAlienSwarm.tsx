@@ -122,7 +122,7 @@ const QueenInstance: React.FC<{
     // Dynamic locomotion playback speed
     const activeAct = actions[curAction.current];
     if (activeAct) {
-      activeAct.timeScale = alien.state === 'ATTACKING' ? 1.35 : alien.state === 'STALKING' ? 1.0 : 1.35;
+      activeAct.timeScale = alien.state === 'ATTACKING' ? 1.5 : alien.state === 'STALKING' ? 1.15 : 1.75;
     }
 
     // 2. Align root to Mars surface normal, heading & dune pitch
@@ -230,21 +230,21 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
 
       // Hit & Run Predatory Wave Cycle: 0-11s attack, 11-18s dune retreat & regroup
       const isRetreat = ((time + i * 1.6) % 18.0) > 11.0;
-      let dirX = toX / (dist || 1), dirZ = toZ / (dist || 1), speed = 11.5;
+      let dirX = toX / (dist || 1), dirZ = toZ / (dist || 1), speed = 16.5;
 
       if (isRetreat) {
         a.state = 'FLEEING'; anyFleeing = true;
         dirX = -dirX; dirZ = -dirZ;
-        speed = dist > 55.0 ? 3.5 : 12.5;
+        speed = dist > 55.0 ? 5.0 : 18.0;
       } else if (a.state === 'ATTACKING' ? dist <= 6.2 : dist <= 4.8) {
-        a.state = 'ATTACKING'; speed = 3.6; anyAttacking = true;
+        a.state = 'ATTACKING'; speed = 4.8; anyAttacking = true;
         a.attackTimer += dt * 8.0;
         const side = i % 2 === 0 ? 1 : -1;
         dirX = -dirZ * side * 0.7 + dirX * 0.4;
         dirZ = dirX * side * 0.7 + dirZ * 0.4;
       } else {
-        a.state = dist < 25.0 ? 'SPRINTING' : 'STALKING';
-        speed = dist < 25.0 ? 12.0 : 7.8;
+        a.state = dist < 28.0 ? 'SPRINTING' : 'STALKING';
+        speed = dist < 28.0 ? 17.5 : 10.5;
       }
 
       // Smooth exponential velocity lerp
