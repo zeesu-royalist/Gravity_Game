@@ -38,7 +38,7 @@ interface MarsExplorationProps {
     canEnterRover: boolean;
     canEnterRocket: boolean;
     roverSpeed: number;
-    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean };
+    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean };
   }) => void;
   astronautPosRef: React.MutableRefObject<THREE.Vector3>;
   roverPosRef: React.MutableRefObject<THREE.Vector3>;
@@ -67,6 +67,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
   const roverSteerAngle = useRef(0);
   const roverWheelSpin = useRef(0);
   const lastHud = useRef({ canEnterRover: false, canEnterRocket: false, speed: 0 });
+  const lastThreat = useRef<{ count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean } | undefined>(undefined);
 
   // 1. Curved Red Martian Terrain Sheet
   const marsTerrainGeom = useMemo(() => {
@@ -184,6 +185,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         canEnterRover,
         canEnterRocket,
         roverSpeed: speedKmh,
+        alienThreat: lastThreat.current,
       });
     }
   });
@@ -257,7 +259,8 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         roverPos={roverPosRef.current}
         playerMode={playerMode}
         active={isLanded && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')}
-        onThreatChange={(threat: { count: number; nearestDist: number; isAttacking: boolean }) => {
+        onThreatChange={(threat) => {
+          lastThreat.current = threat;
           onUpdateHUD({
             astronautPos: astronautPosRef.current,
             roverPos: roverPosRef.current,

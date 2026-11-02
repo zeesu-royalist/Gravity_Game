@@ -79,7 +79,7 @@ export interface AlienSimData {
   roll: number;
   bobY: number;
   health: number;
-  state: 'STALKING' | 'SPRINTING' | 'ATTACKING';
+  state: 'STALKING' | 'SPRINTING' | 'ATTACKING' | 'FLEEING';
   attackTimer: number;
   strideTimer: number;
   stridePhase: number;
@@ -90,7 +90,7 @@ export interface MarsAlienSwarmProps {
   roverPos: THREE.Vector3;
   playerMode: 'ROCKET' | 'ASTRONAUT' | 'ROVER';
   active: boolean;
-  onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean }) => void;
+  onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean }) => void;
 }
 
 interface AlienJointRefs {
@@ -252,35 +252,45 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
       const dist = Math.hypot(toTargetX, toTargetZ);
       if (dist < minDistance) minDistance = dist;
 
-      // Desired speed based on distance
-      let desiredSpeed = 11.2;
-      if (dist <= 3.8) {
-        // Attack range: fast circling and striking
-        a.state = 'ATTACKING';
-        desiredSpeed = 3.2;
-        anyAttacking = true;
-        a.attackTimer += dt * 8.0;
-      } else if (dist < 18.0) {
-        // Full aggressive sprint
-        a.state = 'SPRINTING';
-        desiredSpeed = 11.8;
-      } else {
-        // Pacing / Stalking
-        a.state = 'STALKING';
-        desiredSpeed = 7.5;
-      }
+      // Predatory Wave Strike Cycle: 0 to 11s = Chase & Attack, 11s to 18s = Flee into dunes & regroup
+      const cycleTime = (time + i * 1.6) % 18.0;
+      const isFleeing = cycleTime > 11.0;
 
-      // Desired velocity towards player
       let dirX = toTargetX / (dist || 1);
       let dirZ = toTargetZ / (dist || 1);
+      let desiredSpeed = 11.2;
 
-      if (a.state === 'ATTACKING') {
-        // Strafe & circle target while striking
-        const strafeSide = i % 2 === 0 ? 1 : -1;
-        const strafeX = -dirZ * strafeSide * 0.7 + dirX * 0.4;
-        const strafeZ = dirX * strafeSide * 0.7 + dirZ * 0.4;
-        dirX = strafeX;
-        dirZ = strafeZ;
+      if (isFleeing) {
+        a.state = 'FLEEING';
+        // Run in opposite direction away from player into dunes
+        dirX = -dirX;
+        dirZ = -dirZ;
+        desiredSpeed = dist > 48.0 ? 3.5 : 12.0;
+      } else {
+        // Hysteresis for attack state: enter at <= 4.2m, stay attacking until > 5.8m (Zero boundary flicker!)
+        const wasAttacking = a.state === 'ATTACKING';
+        const isAttackRange = wasAttacking ? dist <= 5.8 : dist <= 4.2;
+
+        if (isAttackRange) {
+          // Attack range: fast circling and striking
+          a.state = 'ATTACKING';
+          desiredSpeed = 3.2;
+          anyAttacking = true;
+          a.attackTimer += dt * 8.0;
+
+          // Strafe & circle target while striking
+          const strafeSide = i % 2 === 0 ? 1 : -1;
+          dirX = -dirZ * strafeSide * 0.7 + dirX * 0.4;
+          dirZ = dirX * strafeSide * 0.7 + dirZ * 0.4;
+        } else if (dist < 20.0) {
+          // Full aggressive sprint towards target
+          a.state = 'SPRINTING';
+          desiredSpeed = 11.5;
+        } else {
+          // Stalking
+          a.state = 'STALKING';
+          desiredSpeed = 7.5;
+        }
       }
 
       const desiredVelX = dirX * desiredSpeed;
@@ -375,10 +385,10 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
       if (joints.tail2) joints.tail2.rotation.y = tailWave2 * 0.45;
       if (joints.tail3) joints.tail3.rotation.y = tailWave3 * 0.6;
 
-      // Pulse floating tactical marker (Zero DOM, zero z-fighting)
+      // Smooth floating tactical diamond marker (Zero DOM, zero z-fighting, zero pulse jitter)
       if (joints.marker) {
-        joints.marker.rotation.y = time * 2.5 + i;
-        const markerScale = a.state === 'ATTACKING' ? 1.3 + Math.sin(time * 12) * 0.2 : 1.0;
+        joints.marker.rotation.y = time * 1.5 + i;
+        const markerScale = a.state === 'ATTACKING' ? 1.25 : 0.95;
         joints.marker.scale.set(markerScale, markerScale, markerScale);
       }
     }
@@ -388,14 +398,16 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
       playAlienScreech(anyAttacking);
     }
 
-    // Report threat status to HUD (throttled to 10Hz)
+    // Report threat status to HUD (throttled to 5Hz to prevent React state churn)
     const nowTime = performance.now();
-    if (onThreatChange && nowTime - lastThreatUpdate.current > 100) {
+    if (onThreatChange && nowTime - lastThreatUpdate.current > 200) {
       lastThreatUpdate.current = nowTime;
+      const anyFleeing = alienList.some((al) => al.state === 'FLEEING');
       onThreatChange({
         count: alienList.length,
         nearestDist: Math.round(minDistance),
         isAttacking: anyAttacking,
+        isFleeing: anyFleeing,
       });
     }
   });

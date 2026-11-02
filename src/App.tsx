@@ -1,4 +1,4 @@
-import React, { Suspense, useRef, useState, useEffect } from 'react';
+import React, { Suspense, useRef, useState, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Html, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
@@ -126,8 +126,36 @@ export default function App() {
     canEnterRover: boolean;
     canEnterRocket: boolean;
     roverSpeed: number;
-    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean };
+    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean };
   }>({ canEnterRover: false, canEnterRocket: false, roverSpeed: 0 });
+
+  // Stable HUD updater with hysteresis and equality check (prevents re-render churn & flickering)
+  const handleUpdateHUD = useCallback((data: {
+    canEnterRover?: boolean;
+    canEnterRocket?: boolean;
+    roverSpeed?: number;
+    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean };
+  }) => {
+    setHudState((prev) => {
+      const canEnterRover = data.canEnterRover ?? prev.canEnterRover;
+      const canEnterRocket = data.canEnterRocket ?? prev.canEnterRocket;
+      const roverSpeed = data.roverSpeed ?? prev.roverSpeed;
+      const alienThreat = data.alienThreat !== undefined ? data.alienThreat : prev.alienThreat;
+
+      if (
+        prev.canEnterRover === canEnterRover &&
+        prev.canEnterRocket === canEnterRocket &&
+        prev.roverSpeed === roverSpeed &&
+        prev.alienThreat?.isAttacking === alienThreat?.isAttacking &&
+        prev.alienThreat?.isFleeing === alienThreat?.isFleeing &&
+        prev.alienThreat?.count === alienThreat?.count &&
+        prev.alienThreat?.nearestDist === alienThreat?.nearestDist
+      ) {
+        return prev;
+      }
+      return { canEnterRover, canEnterRocket, roverSpeed, alienThreat };
+    });
+  }, []);
 
   const posRef = useRef(new THREE.Vector3(0, 0.2, 0));
   const velRef = useRef(new THREE.Vector3(0, 0, 0));
@@ -338,30 +366,38 @@ export default function App() {
     <div className={`relative w-full h-full overflow-hidden select-none font-sans transition-colors duration-1000 ${isInSpace ? 'bg-[#000003]' : 'bg-[#87ceeb]'}`}>
       {/* Xenomorph Attack Screen Vignette */}
       {isAtMars && hudState.alienThreat?.isAttacking && (
-        <div className="pointer-events-none fixed inset-0 z-20 shadow-[inset_0_0_120px_rgba(239,68,68,0.6)] border-4 border-red-500/50 animate-pulse" />
+        <div className="pointer-events-none fixed inset-0 z-20 shadow-[inset_0_0_120px_rgba(239,68,68,0.5)] border-4 border-red-500/40 transition-opacity duration-300" />
       )}
 
       {/* Xenomorph Alien Swarm Threat HUD */}
       {isAtMars && hudState.alienThreat && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER') && (
-        <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-25 px-5 py-2.5 rounded-2xl border-2 backdrop-blur-md shadow-2xl flex items-center gap-3.5 transition-all ${
+        <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-25 px-5 py-2.5 rounded-2xl border-2 backdrop-blur-md shadow-2xl flex items-center gap-3.5 transition-all duration-300 ${
           hudState.alienThreat.isAttacking
-            ? 'bg-red-950/95 border-red-500 text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.8)] animate-bounce'
-            : 'bg-black/90 border-amber-500/80 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.5)]'
+            ? 'bg-red-950/95 border-red-500 text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.7)]'
+            : hudState.alienThreat.isFleeing
+            ? 'bg-cyan-950/90 border-cyan-500/80 text-cyan-200 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+            : 'bg-black/90 border-amber-500/80 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
         }`}>
-          <span className="text-2xl">{hudState.alienThreat.isAttacking ? '🚨' : '⚠️'}</span>
+          <span className="text-2xl">{hudState.alienThreat.isAttacking ? '🚨' : hudState.alienThreat.isFleeing ? '💨' : '⚠️'}</span>
           <div>
             <div className="font-black text-xs tracking-wider uppercase flex items-center gap-2">
-              <span className={hudState.alienThreat.isAttacking ? 'text-red-400 font-extrabold' : 'text-amber-400'}>
-                {hudState.alienThreat.isAttacking ? 'UNDER ALIENS ATTACK' : 'ALIENS DETECTED!'}
+              <span className={hudState.alienThreat.isAttacking ? 'text-red-400 font-extrabold' : hudState.alienThreat.isFleeing ? 'text-cyan-300 font-extrabold' : 'text-amber-400'}>
+                {hudState.alienThreat.isAttacking
+                  ? 'UNDER ALIENS ATTACK!'
+                  : hudState.alienThreat.isFleeing
+                  ? 'ALIENS RETREATING INTO DUNES'
+                  : 'ALIENS CHARGING IN!'}
               </span>
-              <span className="px-1.5 py-0.5 bg-red-900/80 text-red-300 font-mono text-[10px] rounded border border-red-500/50">
+              <span className={`px-1.5 py-0.5 font-mono text-[10px] rounded border ${
+                hudState.alienThreat.isFleeing ? 'bg-cyan-900/80 text-cyan-300 border-cyan-500/50' : 'bg-red-900/80 text-red-300 border-red-500/50'
+              }`}>
                 {hudState.alienThreat.count} HOSTILES
               </span>
             </div>
             <div className="text-[11px] font-mono text-gray-300 flex items-center gap-2 mt-0.5">
-              <span>DISTANCE: <strong className={hudState.alienThreat.nearestDist < 8 ? 'text-red-400 font-bold' : 'text-amber-300 font-bold'}>{hudState.alienThreat.nearestDist}m</strong></span>
+              <span>DISTANCE: <strong className={hudState.alienThreat.nearestDist < 8 ? 'text-red-400 font-bold' : hudState.alienThreat.isFleeing ? 'text-cyan-300 font-bold' : 'text-amber-300 font-bold'}>{hudState.alienThreat.nearestDist}m</strong></span>
               <span>•</span>
-              <span>{playerMode === 'ASTRONAUT' ? 'BOARD ROVER [E] OR EVADE BY HOPPING [SPACE]!' : 'DRIVE FULL THROTTLE TO OUTRUN [W]!'}</span>
+              <span>{hudState.alienThreat.isFleeing ? 'FALLING BACK — PREPARE FOR NEXT WAVE!' : playerMode === 'ASTRONAUT' ? 'BOARD ROVER [E] OR EVADE BY HOPPING [SPACE]!' : 'DRIVE FULL THROTTLE TO OUTRUN [W]!'}</span>
             </div>
           </div>
         </div>
@@ -681,7 +717,7 @@ export default function App() {
             isActive={!isFlying && !isAtMoon && !isAtMars && (stats.altitude < 100 || isLanded || !isFlying)}
             playerMode={playerMode}
             onPlayerModeChange={setPlayerMode}
-            onUpdateHUD={setHudState}
+            onUpdateHUD={handleUpdateHUD}
             astronautPosRef={earthAstroPosRef}
             carPosRef={earthCarPosRef}
             keysRef={keysRef}
@@ -692,7 +728,7 @@ export default function App() {
             isLanded={isLanded && isAtMoon}
             playerMode={playerMode}
             onPlayerModeChange={setPlayerMode}
-            onUpdateHUD={setHudState}
+            onUpdateHUD={handleUpdateHUD}
             astronautPosRef={moonAstroPosRef}
             roverPosRef={moonRoverPosRef}
             keysRef={keysRef}
@@ -703,7 +739,7 @@ export default function App() {
             isLanded={isLanded && isAtMars}
             playerMode={playerMode}
             onPlayerModeChange={setPlayerMode}
-            onUpdateHUD={setHudState}
+            onUpdateHUD={handleUpdateHUD}
             astronautPosRef={marsAstroPosRef}
             roverPosRef={marsRoverPosRef}
             keysRef={keysRef}
