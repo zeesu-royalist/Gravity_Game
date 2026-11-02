@@ -94,9 +94,123 @@ interface RocketProps {
   rocketPos: THREE.Vector3;
   rocketQuat: THREE.Quaternion;
   rcsActive: { pitch: number; yaw: number };
+  isExploding?: boolean;
 }
 
-export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rocketQuat, rcsActive }: RocketProps) {
+function RocketExplosionVisual() {
+  const fireballRef = useRef<THREE.Mesh>(null);
+  const coreRef = useRef<THREE.Mesh>(null);
+  const shockwaveRef = useRef<THREE.Mesh>(null);
+  const debrisRef = useRef<THREE.Group>(null);
+  const lightRef = useRef<THREE.PointLight>(null);
+
+  // Random debris directions and rotation velocities
+  const debrisData = useMemo(() => {
+    return Array.from({ length: 22 }, () => {
+      const dir = new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+      ).normalize();
+      const speed = 15 + Math.random() * 28;
+      const rot = new THREE.Vector3(
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 12,
+        (Math.random() - 0.5) * 12
+      );
+      const size = 0.5 + Math.random() * 1.4;
+      return { dir, speed, rot, size };
+    });
+  }, []);
+
+  const timeRef = useRef(0);
+
+  useFrame((_, delta) => {
+    timeRef.current += delta;
+    const t = timeRef.current;
+
+    // Fireball expands and fades
+    const fireScale = Math.min(32, 2.5 + t * 26);
+    const fireOpacity = Math.max(0, 1 - t / 2.6);
+    if (fireballRef.current) {
+      fireballRef.current.scale.setScalar(fireScale);
+      (fireballRef.current.material as THREE.MeshBasicMaterial).opacity = fireOpacity * 0.88;
+    }
+
+    if (coreRef.current) {
+      const coreScale = Math.min(18, 1.5 + t * 16);
+      coreRef.current.scale.setScalar(coreScale);
+      (coreRef.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - t / 1.7);
+    }
+
+    // Shockwave ring expands horizontally
+    if (shockwaveRef.current) {
+      const ringScale = Math.min(48, 2.5 + t * 38);
+      shockwaveRef.current.scale.set(ringScale, ringScale, 1);
+      (shockwaveRef.current.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 0.95 - t / 2.2);
+    }
+
+    // Debris fragments expand outward
+    if (debrisRef.current) {
+      debrisRef.current.children.forEach((child, i) => {
+        const d = debrisData[i];
+        if (d && child) {
+          child.position.addScaledVector(d.dir, d.speed * delta);
+          child.rotation.x += d.rot.x * delta;
+          child.rotation.y += d.rot.y * delta;
+          child.rotation.z += d.rot.z * delta;
+        }
+      });
+    }
+
+    // Blast point light flash
+    if (lightRef.current) {
+      lightRef.current.intensity = Math.max(0, 140 * (1 - t / 2.4));
+    }
+  });
+
+  return (
+    <group position={[0, 13.5, 0]}>
+      {/* Outer Fireball Sphere */}
+      <mesh ref={fireballRef}>
+        <sphereGeometry args={[1, 24, 24]} />
+        <meshBasicMaterial color="#ff4200" transparent opacity={0.88} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+
+      {/* Inner White-Hot Core */}
+      <mesh ref={coreRef}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color="#fffbe6" transparent opacity={0.96} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+
+      {/* Expanding Shockwave Ring */}
+      <mesh ref={shockwaveRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.9, 1.3, 32]} />
+        <meshBasicMaterial color="#ff8800" transparent opacity={0.95} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+
+      {/* Debris Shrapnel Particles */}
+      <group ref={debrisRef}>
+        {debrisData.map((d, i) => (
+          <mesh key={i} scale={[d.size, d.size * 1.6, d.size]}>
+            <boxGeometry args={[1, 1, 1]} />
+            <meshStandardMaterial
+              color={i % 2 === 0 ? '#1e293b' : '#ff5500'}
+              roughness={0.4}
+              metalness={0.6}
+              emissive={i % 2 === 0 ? '#000000' : '#ff2200'}
+              emissiveIntensity={0.8}
+            />
+          </mesh>
+        ))}
+      </group>
+
+      <pointLight ref={lightRef} color="#ff7700" intensity={140} distance={380} decay={1.5} />
+    </group>
+  );
+}
+
+export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rocketQuat, rcsActive, isExploding }: RocketProps) {
   const { scene } = useGLTF('/models/rocket.glb');
   const groupRef = useRef<THREE.Group>(null);
   const flameGroupRef = useRef<THREE.Group>(null);
@@ -167,46 +281,52 @@ export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rock
 
   return (
     <group ref={groupRef} position={[0, 0.2, 0]}>
-      {/* 3D Rocket Model - Rotated 180° so front faces camera */}
-      <group scale={[1.2, 1.2, 1.2]} rotation={[0, Math.PI, 0]}>
-        <primitive object={centeredRocket} />
-      </group>
+      {isExploding ? (
+        <RocketExplosionVisual />
+      ) : (
+        <>
+          {/* 3D Rocket Model - Rotated 180° so front faces camera */}
+          <group scale={[1.2, 1.2, 1.2]} rotation={[0, Math.PI, 0]}>
+            <primitive object={centeredRocket} />
+          </group>
 
-      {/* Commander ZEESU Official Mission Insignia */}
-      <mesh geometry={zeesuDecalGeom} position={[0, 16.5, 0]}>
-        <meshStandardMaterial map={zeesuTexture} transparent opacity={0.99} roughness={0.22} metalness={0.68} side={THREE.DoubleSide} />
-      </mesh>
-      <pointLight position={[0, 16.5, 2.2]} color="#fef08a" intensity={1.8} distance={3.5} />
+          {/* Commander ZEESU Official Mission Insignia */}
+          <mesh geometry={zeesuDecalGeom} position={[0, 16.5, 0]}>
+            <meshStandardMaterial map={zeesuTexture} transparent opacity={0.99} roughness={0.22} metalness={0.68} side={THREE.DoubleSide} />
+          </mesh>
+          <pointLight position={[0, 16.5, 2.2]} color="#fef08a" intensity={1.8} distance={3.5} />
 
-      {/* Engine Exhaust Flames (Base at y = 0, pointing downwards) */}
-      <group ref={flameGroupRef} position={[0, 0, 0]}>
-        <mesh ref={flameOuterRef} geometry={flameConeGeom} position={[0, 0, 0.15]} visible={false}>
-          <meshBasicMaterial color="#ff6a00" transparent opacity={0.82} blending={THREE.AdditiveBlending} depthWrite={false} />
-        </mesh>
-        <mesh ref={flameCoreRef} geometry={flameConeGeom} position={[0, 0, 0.15]} visible={false}>
-          <meshBasicMaterial color="#fffdf0" transparent opacity={0.96} blending={THREE.AdditiveBlending} depthWrite={false} />
-        </mesh>
-        <group ref={boosterFlamesRef} visible={false}>
-          {BOOSTER_OFFSETS.map(([bx, by, bz], idx) => (
-            <group key={idx} position={[bx, by, bz]}>
-              <mesh geometry={flameConeGeom}>
-                <meshBasicMaterial color="#ff7a00" transparent opacity={0.8} blending={THREE.AdditiveBlending} depthWrite={false} />
-              </mesh>
-              <mesh geometry={flameConeGeom} scale={[0.55, 0.7, 0.55]}>
-                <meshBasicMaterial color="#ffffff" transparent opacity={0.95} blending={THREE.AdditiveBlending} depthWrite={false} />
-              </mesh>
+          {/* Engine Exhaust Flames (Base at y = 0, pointing downwards) */}
+          <group ref={flameGroupRef} position={[0, 0, 0]}>
+            <mesh ref={flameOuterRef} geometry={flameConeGeom} position={[0, 0, 0.15]} visible={false}>
+              <meshBasicMaterial color="#ff6a00" transparent opacity={0.82} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </mesh>
+            <mesh ref={flameCoreRef} geometry={flameConeGeom} position={[0, 0, 0.15]} visible={false}>
+              <meshBasicMaterial color="#fffdf0" transparent opacity={0.96} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </mesh>
+            <group ref={boosterFlamesRef} visible={false}>
+              {BOOSTER_OFFSETS.map(([bx, by, bz], idx) => (
+                <group key={idx} position={[bx, by, bz]}>
+                  <mesh geometry={flameConeGeom}>
+                    <meshBasicMaterial color="#ff7a00" transparent opacity={0.8} blending={THREE.AdditiveBlending} depthWrite={false} />
+                  </mesh>
+                  <mesh geometry={flameConeGeom} scale={[0.55, 0.7, 0.55]}>
+                    <meshBasicMaterial color="#ffffff" transparent opacity={0.95} blending={THREE.AdditiveBlending} depthWrite={false} />
+                  </mesh>
+                </group>
+              ))}
             </group>
-          ))}
-        </group>
-      </group>
+          </group>
 
-      <pointLight ref={flameLightRef} position={[0, -1.0, 0]} color="#ff8800" intensity={0} distance={220} decay={2} />
+          <pointLight ref={flameLightRef} position={[0, -1.0, 0]} color="#ff8800" intensity={0} distance={220} decay={2} />
 
-      {/* RCS Steering Cold-Gas Puffs */}
-      {rcsActive.yaw > 0 && <mesh position={[-1.2, 18, 0]} rotation={[0, 0, Math.PI / 2]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
-      {rcsActive.yaw < 0 && <mesh position={[1.2, 18, 0]} rotation={[0, 0, -Math.PI / 2]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
-      {rcsActive.pitch > 0 && <mesh position={[0, 18, 1.2]} rotation={[Math.PI / 2, 0, 0]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
-      {rcsActive.pitch < 0 && <mesh position={[0, 18, -1.2]} rotation={[-Math.PI / 2, 0, 0]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
+          {/* RCS Steering Cold-Gas Puffs */}
+          {rcsActive.yaw > 0 && <mesh position={[-1.2, 18, 0]} rotation={[0, 0, Math.PI / 2]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
+          {rcsActive.yaw < 0 && <mesh position={[1.2, 18, 0]} rotation={[0, 0, -Math.PI / 2]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
+          {rcsActive.pitch > 0 && <mesh position={[0, 18, 1.2]} rotation={[Math.PI / 2, 0, 0]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
+          {rcsActive.pitch < 0 && <mesh position={[0, 18, -1.2]} rotation={[-Math.PI / 2, 0, 0]}><coneGeometry args={[0.35, 1.6, 8]} /><meshBasicMaterial color="#ffffff" transparent opacity={0.75} /></mesh>}
+        </>
+      )}
     </group>
   );
 }

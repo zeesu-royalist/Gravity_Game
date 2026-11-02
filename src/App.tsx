@@ -12,6 +12,7 @@ import { MoonExploration, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './MoonExpl
 import { MarsExploration, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE } from './MarsExploration';
 import { EarthExploration, EARTH_CAR_DEFAULT_POS, EARTH_ASTRONAUT_DEFAULT_POS } from './EarthExploration';
 import { BuranLaunchpad, ActiveRocketMesh, LunarLandingSiteMarker } from './Rocket';
+import { AsteroidBelt } from './AsteroidBelt';
 
 const EARTH_LANDING_SITE = new THREE.Vector3(0, 0.2, 0);
 const MOON_APPROACH = new THREE.Vector3(MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y + 180, MOON_LANDING_SITE.z);
@@ -124,6 +125,10 @@ export default function App() {
   const [throttle, setThrottle] = useState(1.0);
   const [resetCount, setResetCount] = useState(0);
   const [playerMode, setPlayerMode] = useState<'ROCKET' | 'ASTRONAUT' | 'ROVER'>('ROCKET');
+  const [isExploding, setIsExploding] = useState(false);
+  const [asteroidAlert, setAsteroidAlert] = useState<{ message: string; type: 'BLAST' | 'DEFLECTION' } | null>(null);
+  const blastTimeoutRef = useRef<any>(null);
+  const alertTimeoutRef = useRef<any>(null);
 
   const [stats, setStats] = useState({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON' as 'MOON' | 'MARS' | 'EARTH', stage: 'STANDBY ON EARTH PAD' });
   const [hudState, setHudState] = useState<{
@@ -199,6 +204,10 @@ export default function App() {
   const currentWorld: 'EARTH' | 'MOON' | 'MARS' = isAtMars ? 'MARS' : isAtMoon ? 'MOON' : 'EARTH';
 
   const executeLaunch = (chosenDest?: 'MOON' | 'MARS') => {
+    if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
+    if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
+    setIsExploding(false);
+    setAsteroidAlert(null);
     if (chosenDest) setDestination(chosenDest);
     setShowDestModal(false);
     setIsFlying(true);
@@ -217,7 +226,11 @@ export default function App() {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
+    if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
+    if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
+    setIsExploding(false);
+    setAsteroidAlert(null);
     setIsFlying(false);
     setIsLanded(false);
     setAutopilot(false);
@@ -238,12 +251,46 @@ export default function App() {
     marsRoverPosRef.current.set(MARS_LANDING_SITE.x + 11.0, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 5.5);
     setResetCount((c) => c + 1);
     setStats({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON', stage: 'STANDBY ON EARTH PAD' });
-  };
+  }, []);
+
+  const handleAsteroidBlast = useCallback((_astPos: THREE.Vector3, radius: number) => {
+    setIsExploding(true);
+    setAutopilot(false);
+    velRef.current.set(0, 0, 0);
+
+    setAsteroidAlert({
+      type: 'BLAST',
+      message: `CRITICAL IMPACT WITH DEEP-SPACE ASTEROID (${Math.round(radius)}m)!\n25% LETHAL BLAST PROBABILITY TRIGGERED — SHIP DESTROYED!\nINITIATING EMERGENCY RESET PROTOCOL BACK TO EARTH...`,
+    });
+
+    if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
+    blastTimeoutRef.current = setTimeout(() => {
+      handleReset();
+    }, 2800);
+  }, [handleReset]);
+
+  const handleAsteroidDeflection = useCallback((astPos: THREE.Vector3) => {
+    // Subtle lateral deflection push away from asteroid
+    const nudge = posRef.current.clone().sub(astPos).normalize().multiplyScalar(40);
+    velRef.current.add(nudge);
+
+    setAsteroidAlert({
+      type: 'DEFLECTION',
+      message: `ASTEROID GRAVITATIONAL COLLISION DEFLECTED!\n75% PROBABILITY TRIGGERED: SHIELD ABSORPTION 100% NOMINAL!\nCONTINUING MARS EXPEDITION SAFELY.`,
+    });
+
+    if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
+    alertTimeoutRef.current = setTimeout(() => {
+      setAsteroidAlert((prev) => (prev?.type === 'DEFLECTION' ? null : prev));
+    }, 2500);
+  }, []);
 
   const isFlyingRef = useRef(isFlying);
   isFlyingRef.current = isFlying;
   const isLandedRef = useRef(isLanded);
   isLandedRef.current = isLanded;
+  const isExplodingRef = useRef(isExploding);
+  isExplodingRef.current = isExploding;
   const playerModeRef = useRef(playerMode);
   playerModeRef.current = playerMode;
   const autopilotRef = useRef(autopilot);
@@ -252,7 +299,7 @@ export default function App() {
   hudStateRef.current = hudState;
 
   const handleInteraction = () => {
-    if (isFlyingRef.current) return;
+    if (isFlyingRef.current || isExplodingRef.current) return;
     if (playerModeRef.current === 'ROCKET') setPlayerMode('ASTRONAUT');
     else if (playerModeRef.current === 'ASTRONAUT') {
       if (hudStateRef.current.canEnterRover) setPlayerMode('ROVER');
@@ -265,9 +312,10 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current[e.code] = true;
+      if (e.code === 'KeyR') { handleReset(); return; }
+      if (isExplodingRef.current) return;
       if (e.code === 'KeyE') handleInteraction();
       if (playerModeRef.current === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlyingRef.current))) handleLaunch();
-      if (e.code === 'KeyR') handleReset();
       if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') setAutopilot((p) => !p);
       if (playerModeRef.current === 'ROCKET') {
         if (e.code.startsWith('Shift')) setThrottle((p) => Math.min(1.0, p + 0.15));
@@ -308,7 +356,7 @@ export default function App() {
       const delta = Math.min(0.1, (now - lastTime) / 1000);
       lastTime = now;
 
-      if (isFlying && !isLanded) {
+      if (isFlying && !isLanded && !isExplodingRef.current) {
         const keys = keysRef.current, pos = posRef.current, vel = velRef.current;
         const isMars = destination === 'MARS';
         const isMoon = destination === 'MOON';
@@ -414,6 +462,32 @@ export default function App() {
       {/* Xenomorph Attack Screen Vignette */}
       {isAtMars && hudState.alienThreat?.isAttacking && (
         <div className="pointer-events-none fixed inset-0 z-20 shadow-[inset_0_0_120px_rgba(239,68,68,0.5)] border-4 border-red-500/40 transition-opacity duration-300" />
+      )}
+
+      {/* Catastrophic Asteroid Blast Screen Vignette */}
+      {isExploding && (
+        <div className="pointer-events-none fixed inset-0 z-30 shadow-[inset_0_0_160px_rgba(255,0,0,0.9)] bg-red-600/20 border-8 border-red-500 animate-pulse" />
+      )}
+
+      {/* Asteroid Alert Banner (Blast or Deflection) */}
+      {asteroidAlert && (
+        <div className="pointer-events-none fixed top-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+          <div className={`px-6 py-4 rounded-2xl border-2 backdrop-blur-xl shadow-2xl text-center max-w-xl ${
+            asteroidAlert.type === 'BLAST'
+              ? 'bg-red-950/95 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.8)] text-red-100'
+              : 'bg-emerald-950/95 border-emerald-400 shadow-[0_0_40px_rgba(16,185,129,0.7)] text-emerald-100'
+          }`}>
+            <div className={`text-sm font-black tracking-wider uppercase flex items-center justify-center gap-2 mb-1.5 ${
+              asteroidAlert.type === 'BLAST' ? 'text-red-400 animate-pulse' : 'text-emerald-300'
+            }`}>
+              <span>{asteroidAlert.type === 'BLAST' ? '💥' : '🛡️'}</span>
+              <span>{asteroidAlert.type === 'BLAST' ? 'CRITICAL IMPACT — 25% LETHAL BLAST!' : 'COLLISION DEFLECTION — 75% SURVIVED!'}</span>
+            </div>
+            <div className="text-xs font-mono whitespace-pre-line text-gray-200 font-semibold leading-relaxed">
+              {asteroidAlert.message}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Header */}
@@ -742,6 +816,18 @@ export default function App() {
           <SpaceEnvironment altitude={stats.altitude} rocketPos={posRef.current} />
           <LunarLandingSiteMarker />
 
+          <AsteroidBelt
+            altitude={stats.altitude}
+            rocketPos={posRef.current}
+            isFlying={isFlying}
+            isLanded={isLanded}
+            destination={destination}
+            isExploding={isExploding}
+            resetCount={resetCount}
+            onBlast={handleAsteroidBlast}
+            onDeflection={handleAsteroidDeflection}
+          />
+
           <ActiveRocketMesh
             isFlying={isFlying}
             isLanded={isLanded}
@@ -749,6 +835,7 @@ export default function App() {
             rocketPos={posRef.current}
             rocketQuat={quatRef.current}
             rcsActive={rcsActiveRef.current}
+            isExploding={isExploding}
           />
 
           <EarthExploration
