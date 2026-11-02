@@ -1,6 +1,6 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
+import { useGLTF, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { MOON_LANDING_SITE, MOON_TOUCHDOWN_Y } from './MoonExploration';
 
@@ -337,6 +337,8 @@ export function LunarLandingSiteMarker() {
     <group position={[MOON_LANDING_SITE.x + 5.2, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z - 4]}>
       <mesh position={[0, 2.5, 0]}><cylinderGeometry args={[0.04, 0.04, 5]} /><meshStandardMaterial color="#cbd5e1" metalness={0.9} /></mesh>
       <mesh position={[1.1, 4.2, 0]}><boxGeometry args={[2.2, 1.4, 0.04]} /><meshStandardMaterial color="#0284c7" roughness={0.3} /></mesh>
+      <Text position={[1.1, 4.2, 0.03]} fontSize={0.25} color="#ffffff" anchorX="center" anchorY="middle"> Uff Moon P♡</Text>
+      <Text position={[1.1, 4.2, -0.03]} rotation={[0, Math.PI, 0]} fontSize={0.25} color="#ffffff" anchorX="center" anchorY="middle">Uff Moon P♡</Text>
       <mesh position={[0, 0.05, 0]}><cylinderGeometry args={[1.2, 1.4, 0.1, 16]} /><meshStandardMaterial color="#eab308" metalness={0.8} roughness={0.3} /></mesh>
     </group>
   );

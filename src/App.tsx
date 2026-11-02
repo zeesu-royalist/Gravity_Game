@@ -606,8 +606,8 @@ export default function App() {
       {asteroidAlert && (
         <div className="pointer-events-none fixed top-12 sm:top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center animate-in fade-in zoom-in-95 duration-150 px-2 w-auto max-w-[280px] sm:max-w-md">
           <div className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl border backdrop-blur-md shadow-xl text-center ${asteroidAlert.type === 'BLAST'
-              ? 'bg-red-950/90 border-red-500/80 shadow-[0_0_20px_rgba(239,68,68,0.5)] text-red-100'
-              : 'bg-emerald-950/90 border-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.5)] text-emerald-100'
+            ? 'bg-red-950/90 border-red-500/80 shadow-[0_0_20px_rgba(239,68,68,0.5)] text-red-100'
+            : 'bg-emerald-950/90 border-emerald-400/80 shadow-[0_0_20px_rgba(16,185,129,0.5)] text-emerald-100'
             }`}>
             <div className={`text-[10px] sm:text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-1.5 ${asteroidAlert.type === 'BLAST' ? 'text-red-400 animate-pulse' : 'text-emerald-300'
               }`}>
@@ -761,8 +761,11 @@ export default function App() {
         <div className="relative flex flex-col items-center">
           {/* Actions Guide Popover (opens to the left of the button cluster) */}
           {showActionsInfo && (
-            <div className="absolute right-full mr-2 sm:mr-3 top-0 bg-slate-950/95 backdrop-blur-xl border border-cyan-400/70 rounded-2xl p-3 text-right shadow-[0_8px_32px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-150 w-52 sm:w-60 z-40">
+            <div className="absolute right-full mr-2 sm:mr-3 top-0 bg-slate-950/95 backdrop-blur-xl border border-cyan-400/60 rounded-xl p-3 shadow-[0_8px_32px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-150 w-52 sm:w-60 z-40 text-left">
               <div className="flex items-center justify-between mb-1.5 border-b border-white/10 pb-1">
+                <span className="text-[10px] sm:text-xs text-cyan-300 font-bold uppercase tracking-wide">
+                  For Computer Navigation
+                </span>
                 <button
                   {...actionProps(() => setShowActionsInfo(false))}
                   className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer"
@@ -770,18 +773,33 @@ export default function App() {
                 >
                   ✕
                 </button>
-                <span className="text-[10px] sm:text-xs text-cyan-300 font-bold uppercase tracking-wide">
-                  Action Guide
-                </span>
               </div>
-              <div className="text-[10px] sm:text-xs text-slate-300 font-semibold mb-1">
-                And all other thing like,
+              <div className="text-[9.5px] sm:text-[11px] text-slate-400 font-medium mb-2">
+                Use these keys to play:
               </div>
-              <div className="text-[9px] sm:text-[11px] text-slate-200 font-mono space-y-1 leading-relaxed text-right">
-                <div>• <strong>F</strong> for Fly / launch</div>
-                <div>• <strong>E</strong> for enter in vehical</div>
-                <div>• <strong>Q</strong> for fire gun</div>
-                <div className="text-slate-400 pt-0.5">• <strong>T</strong> for Autopilot • <strong>R</strong> for Reset</div>
+
+              {/* Action Keycaps List */}
+              <div className="space-y-1.5 text-[9.5px] sm:text-[11px] font-mono">
+                <div className="flex items-center gap-2">
+                  <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">F</kbd>
+                  <span className="text-slate-200">for launch</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">E</kbd>
+                  <span className="text-slate-200">for enter / exit</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">Q</kbd>
+                  <span className="text-slate-200">for shoot</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">T</kbd>
+                  <span className="text-slate-200">for auto pilot</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">R</kbd>
+                  <span className="text-slate-200">for restart</span>
+                </div>
               </div>
             </div>
           )}
@@ -790,8 +808,8 @@ export default function App() {
           <button
             {...actionProps(() => setShowActionsInfo((p) => !p))}
             className={`w-6 h-6 sm:w-7 sm:h-7 mb-1.5 sm:mb-2 rounded-full border-1.5 sm:border-2 bg-black/50 hover:bg-black/70 active:scale-90 backdrop-blur-md shadow-md flex items-center justify-center cursor-pointer transition-all select-none touch-manipulation font-serif italic font-bold text-[10px] sm:text-xs ${showActionsInfo
-                ? 'border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
-                : 'border-slate-500/80 text-slate-300 hover:border-cyan-400 hover:text-white'
+              ? 'border-cyan-400 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.8)]'
+              : 'border-slate-500/80 text-slate-300 hover:border-cyan-400 hover:text-white'
               }`}
             title="Toggle Controls Guide (i)"
             aria-label="Toggle Controls Info"
@@ -799,69 +817,84 @@ export default function App() {
             i
           </button>
 
-          {/* Small Circle R: Reset Mission directly above F */}
+          {/* Small Circle: Restart Mission directly above Launch */}
           <button
             {...actionProps(handleReset)}
-            className="w-8 h-8 sm:w-10 sm:h-10 mb-1.5 sm:mb-2 rounded-full border-2 border-slate-700/80 hover:border-red-400 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans text-slate-300 hover:text-red-300 flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
-            title="Reset Mission [R]"
-            aria-label="R for Reset Mission"
+            className="w-8 h-8 sm:w-10 sm:h-10 mb-1.5 sm:mb-2 rounded-full border-2 border-slate-700/80 hover:border-red-400 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none"
+            title="Restart Mission [R]"
+            aria-label="Restart Mission"
           >
-            R
+            <span className="text-[6.5px] sm:text-[8px] font-bold tracking-tight uppercase leading-none text-slate-200 hover:text-red-300">
+              RE
+            </span>
+            <span className="text-[6px] sm:text-[7.5px] font-bold tracking-tight uppercase leading-none mt-0.5 text-slate-200 hover:text-red-300">
+              START
+            </span>
           </button>
 
-          {/* Main Action Buttons Column: F, E, Q */}
+          {/* Main Action Buttons Column: Launch, Enter Exit, Shoot */}
           <div className="flex flex-col items-center gap-1.5 sm:gap-2">
-            {/* Circle F: Fly / Launch */}
+            {/* Circle: Launch */}
             <button
               {...actionProps(handleLaunch)}
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${!isFlying && playerMode === 'ROCKET'
-                  ? 'border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.6)] animate-pulse'
-                  : 'border-slate-700/80 hover:border-cyan-400'
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${!isFlying && playerMode === 'ROCKET'
+                ? 'border-amber-400 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.6)] animate-pulse'
+                : 'border-slate-700/80 hover:border-cyan-400'
                 }`}
-              aria-label="F for Fly / Launch"
-              title="F for Fly / Launch"
+              aria-label="Launch Rocket"
+              title="Launch Rocket [F]"
             >
-              F
+              <span className="text-[8.5px] sm:text-[10px] font-bold tracking-tight uppercase leading-none">
+                LAUNCH
+              </span>
             </button>
 
-            {/* Circle E: Enter / Exit Vehicle */}
+            {/* Circle: Enter / Exit Vehicle */}
             <button
               {...actionProps(handleInteraction)}
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${hudState.canEnterRover || hudState.canEnterRocket || (isLanded && playerMode === 'ROCKET')
-                  ? 'border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.6)] animate-pulse'
-                  : 'border-slate-700/80 hover:border-cyan-400'
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${hudState.canEnterRover || hudState.canEnterRocket || (isLanded && playerMode === 'ROCKET')
+                ? 'border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.6)] animate-pulse'
+                : 'border-slate-700/80 hover:border-cyan-400'
                 }`}
-              aria-label="E for Enter vehicle"
-              title="E for Enter vehicle"
+              aria-label="Enter or Exit vehicle"
+              title="Enter or Exit vehicle [E]"
             >
-              E
+              <span className="text-[8px] sm:text-[9.5px] font-bold tracking-tight uppercase leading-none">
+                ENTER
+              </span>
+              <span className="text-[7px] sm:text-[8.5px] font-bold tracking-tight uppercase leading-none mt-0.5 opacity-90">
+                EXIT
+              </span>
             </button>
 
-            {/* Circle Q: Fire Gun */}
+            {/* Circle: Shoot Gun */}
             <button
               {...qProps}
-              className={`w-11 h-11 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none text-base sm:text-xl font-bold font-sans ${isAtMars && playerMode === 'ASTRONAUT'
-                  ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
-                  : 'border-slate-700/80 hover:border-cyan-400'
+              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${isAtMars && playerMode === 'ASTRONAUT'
+                ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
+                : 'border-slate-700/80 hover:border-cyan-400'
                 }`}
-              aria-label="Q for Fire gun"
-              title="Q for Fire gun"
+              aria-label="Shoot Weapon"
+              title="Shoot Weapon [Q]"
             >
-              Q
+              <span className="text-[8.5px] sm:text-[10px] font-bold tracking-tight uppercase leading-none">
+                SHOOT
+              </span>
             </button>
           </div>
 
-          {/* Small Circle T: Autopilot positioned to the left between E & Q (Matching Mockup exactly) */}
+          {/* Small Circle: Autopilot positioned to the left between E & Q */}
           <button
             {...actionProps(() => setAutopilot((p) => !p))}
-            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md text-[11px] sm:text-sm font-bold font-sans flex items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] ${autopilot
-                ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
-                : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
+            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none ${autopilot
+              ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
+              : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
               }`}
             title="Autopilot Cruise [T]"
             aria-label="T for Autopilot Cruise"
           >
-            T
+            <span className="text-[6.5px] sm:text-[8px] font-bold tracking-tight uppercase leading-none">AUTO</span>
+            <span className="text-[5.5px] sm:text-[7px] font-bold tracking-tight uppercase leading-none mt-0.5 opacity-90">PILOT</span>
           </button>
         </div>
 
