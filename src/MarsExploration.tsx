@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Astronaut } from './Astronaut';
 import { MarsRover } from './MarsRover';
+import { MarsAlienSwarm } from './MarsAlienSwarm';
 import { MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 
 export const MARS_TOUCHDOWN_Y = MARS_POSITION.y + MARS_RADIUS + 0.2;
@@ -37,6 +38,7 @@ interface MarsExplorationProps {
     canEnterRover: boolean;
     canEnterRocket: boolean;
     roverSpeed: number;
+    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean };
   }) => void;
   astronautPosRef: React.MutableRefObject<THREE.Vector3>;
   roverPosRef: React.MutableRefObject<THREE.Vector3>;
@@ -247,6 +249,24 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         rotationY={roverRotY.current}
         quaternion={roverQuat.current}
         isDriven={playerMode === 'ROVER'}
+      />
+
+      {/* 7. Proto-Xenomorph Deacon Alien Swarm */}
+      <MarsAlienSwarm
+        astronautPos={astronautPosRef.current}
+        roverPos={roverPosRef.current}
+        playerMode={playerMode}
+        active={isLanded && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')}
+        onThreatChange={(threat: { count: number; nearestDist: number; isAttacking: boolean }) => {
+          onUpdateHUD({
+            astronautPos: astronautPosRef.current,
+            roverPos: roverPosRef.current,
+            canEnterRover: lastHud.current.canEnterRover,
+            canEnterRocket: lastHud.current.canEnterRocket,
+            roverSpeed: lastHud.current.speed,
+            alienThreat: threat,
+          });
+        }}
       />
     </group>
   );
