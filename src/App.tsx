@@ -128,7 +128,15 @@ export default function App() {
     canEnterRover: boolean;
     canEnterRocket: boolean;
     roverSpeed: number;
-    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean };
+    alienThreat?: {
+      count: number;
+      nearestDist: number;
+      isAttacking: boolean;
+      isFleeing?: boolean;
+      kills?: number;
+      allDead?: boolean;
+      hitConfirmed?: boolean;
+    };
   }>({ canEnterRover: false, canEnterRocket: false, roverSpeed: 0 });
 
   // Stable HUD updater with hysteresis and equality check (prevents re-render churn & flickering)
@@ -136,7 +144,15 @@ export default function App() {
     canEnterRover?: boolean;
     canEnterRocket?: boolean;
     roverSpeed?: number;
-    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean };
+    alienThreat?: {
+      count: number;
+      nearestDist: number;
+      isAttacking: boolean;
+      isFleeing?: boolean;
+      kills?: number;
+      allDead?: boolean;
+      hitConfirmed?: boolean;
+    };
   }) => {
     setHudState((prev) => {
       const canEnterRover = data.canEnterRover ?? prev.canEnterRover;
@@ -151,7 +167,10 @@ export default function App() {
         prev.alienThreat?.isAttacking === alienThreat?.isAttacking &&
         prev.alienThreat?.isFleeing === alienThreat?.isFleeing &&
         prev.alienThreat?.count === alienThreat?.count &&
-        prev.alienThreat?.nearestDist === alienThreat?.nearestDist
+        prev.alienThreat?.nearestDist === alienThreat?.nearestDist &&
+        prev.alienThreat?.kills === alienThreat?.kills &&
+        prev.alienThreat?.allDead === alienThreat?.allDead &&
+        prev.alienThreat?.hitConfirmed === alienThreat?.hitConfirmed
       ) {
         return prev;
       }
@@ -371,35 +390,51 @@ export default function App() {
         <div className="pointer-events-none fixed inset-0 z-20 shadow-[inset_0_0_120px_rgba(239,68,68,0.5)] border-4 border-red-500/40 transition-opacity duration-300" />
       )}
 
-      {/* Xenomorph Alien Swarm Threat HUD */}
+      {/* Xenomorph Alien Swarm Threat & Combat HUD */}
       {isAtMars && hudState.alienThreat && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER') && (
         <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-25 px-5 py-2.5 rounded-2xl border-2 backdrop-blur-md shadow-2xl flex items-center gap-3.5 transition-all duration-300 ${
-          hudState.alienThreat.isAttacking
+          hudState.alienThreat.allDead
+            ? 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-[0_0_35px_rgba(16,185,129,0.7)]'
+            : hudState.alienThreat.isAttacking
             ? 'bg-red-950/95 border-red-500 text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.7)]'
             : hudState.alienThreat.isFleeing
             ? 'bg-cyan-950/90 border-cyan-500/80 text-cyan-200 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
             : 'bg-black/90 border-amber-500/80 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
         }`}>
-          <span className="text-2xl">{hudState.alienThreat.isAttacking ? '🚨' : hudState.alienThreat.isFleeing ? '💨' : '⚠️'}</span>
+          <span className="text-2xl">{hudState.alienThreat.allDead ? '🏆' : hudState.alienThreat.isAttacking ? '🚨' : hudState.alienThreat.isFleeing ? '💨' : '⚠️'}</span>
           <div>
             <div className="font-black text-xs tracking-wider uppercase flex items-center gap-2">
-              <span className={hudState.alienThreat.isAttacking ? 'text-red-400 font-extrabold' : hudState.alienThreat.isFleeing ? 'text-cyan-300 font-extrabold' : 'text-amber-400'}>
-                {hudState.alienThreat.isAttacking
+              <span className={hudState.alienThreat.allDead ? 'text-emerald-400 font-extrabold' : hudState.alienThreat.isAttacking ? 'text-red-400 font-extrabold' : hudState.alienThreat.isFleeing ? 'text-cyan-300 font-extrabold' : 'text-amber-400'}>
+                {hudState.alienThreat.allDead
+                  ? 'MARS SECURED! ALL PREDATORS ELIMINATED!'
+                  : hudState.alienThreat.isAttacking
                   ? 'UNDER ALIENS ATTACK!'
                   : hudState.alienThreat.isFleeing
                   ? 'ALIENS RETREATING INTO DUNES'
                   : 'ALIENS CHARGING IN!'}
               </span>
               <span className={`px-1.5 py-0.5 font-mono text-[10px] rounded border ${
-                hudState.alienThreat.isFleeing ? 'bg-cyan-900/80 text-cyan-300 border-cyan-500/50' : 'bg-red-900/80 text-red-300 border-red-500/50'
+                hudState.alienThreat.allDead
+                  ? 'bg-emerald-900/80 text-emerald-300 border-emerald-500/50'
+                  : hudState.alienThreat.isFleeing
+                  ? 'bg-cyan-900/80 text-cyan-300 border-cyan-500/50'
+                  : 'bg-red-900/80 text-red-300 border-red-500/50'
               }`}>
-                {hudState.alienThreat.count} HOSTILES
+                {hudState.alienThreat.allDead ? '5 / 5 CLEARED' : `${hudState.alienThreat.count} HOSTILES`}
               </span>
             </div>
             <div className="text-[11px] font-mono text-gray-300 flex items-center gap-2 mt-0.5">
-              <span>DISTANCE: <strong className={hudState.alienThreat.nearestDist < 8 ? 'text-red-400 font-bold' : hudState.alienThreat.isFleeing ? 'text-cyan-300 font-bold' : 'text-amber-300 font-bold'}>{hudState.alienThreat.nearestDist}m</strong></span>
+              <span>KILLS: <strong className="text-emerald-400 font-bold">{hudState.alienThreat.kills ?? 0} / 5</strong></span>
               <span>•</span>
-              <span>{hudState.alienThreat.isFleeing ? 'FALLING BACK — PREPARE FOR NEXT WAVE!' : playerMode === 'ASTRONAUT' ? 'BOARD ROVER [E] OR EVADE BY HOPPING [SPACE]!' : 'DRIVE FULL THROTTLE TO OUTRUN [W]!'}</span>
+              {hudState.alienThreat.allDead ? (
+                <span className="text-emerald-300 font-semibold">ALL GASTAROID QUEENS NEUTRALIZED — BASE SECURE!</span>
+              ) : (
+                <>
+                  <span>DIST: <strong className={hudState.alienThreat.nearestDist < 8 ? 'text-red-400 font-bold' : 'text-amber-300 font-bold'}>{hudState.alienThreat.nearestDist}m</strong></span>
+                  <span>•</span>
+                  <span>{playerMode === 'ASTRONAUT' ? 'HOLD [Q] TO FIRE PLASMA RIFLE!' : 'DRIVE FULL THROTTLE TO EVADE [W]!'}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -595,6 +630,7 @@ export default function App() {
               <>
                 <div>• <strong>[ W / A / S / D ]</strong>: Walk & Turn on {currentWorld}</div>
                 <div>• <strong>[ Space ]</strong>: {isAtMars ? 'Martian 0.38G Hop' : isAtMoon ? 'Lunar Low-G Hop' : 'Jump'}</div>
+                {isAtMars && <div>• <strong>[ Q ]</strong>: <span className="text-cyan-400 font-bold">Fire Plasma Rifle</span></div>}
                 <div>• <strong>[ E ]</strong>: Drive {isAtMars ? 'Martian Rover' : isAtMoon ? 'Lunar Rover' : 'Car'} or Board Rocket</div>
                 <div>• <strong>[ Drag ]</strong>: 360° Mouse Look</div>
               </>
@@ -620,6 +656,29 @@ export default function App() {
 
       {/* Action Buttons */}
       <div className="absolute bottom-6 right-6 z-10 flex items-center gap-3">
+        {playerMode === 'ASTRONAUT' && isAtMars && (
+          <button
+            onMouseDown={() => handleDpad('KeyQ', true)}
+            onMouseUp={() => handleDpad('KeyQ', false)}
+            onTouchStart={() => handleDpad('KeyQ', true)}
+            onTouchEnd={() => handleDpad('KeyQ', false)}
+            className="px-5 py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:scale-95 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.6)] cursor-pointer flex items-center gap-2 select-none"
+          >
+            <span>🔫</span>
+            <span>FIRE PLASMA RIFLE [Hold Q]</span>
+          </button>
+        )}
+
+        {playerMode === 'ASTRONAUT' && (hudState.canEnterRover || hudState.canEnterRocket) && (
+          <button
+            onClick={handleInteraction}
+            className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-emerald-300 shadow-xl cursor-pointer flex items-center gap-2"
+          >
+            <span>{hudState.canEnterRover ? '🏎️' : '🚀'}</span>
+            <span>{hudState.canEnterRover ? `DRIVE ${isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'CAR'} [Press E]` : `BOARD ROCKET [Press E]`}</span>
+          </button>
+        )}
+
         {playerMode === 'ROVER' && (
           <button onClick={handleInteraction} className="px-5 py-3.5 bg-amber-600 hover:bg-amber-500 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-amber-300 shadow-xl cursor-pointer">
             🚪 EXIT {isAtMars ? 'MARTIAN ROVER' : isAtMoon ? 'LUNAR ROVER' : 'STORMCHASER'} [Press E]

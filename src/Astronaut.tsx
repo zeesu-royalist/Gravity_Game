@@ -9,6 +9,8 @@ interface AstronautProps {
   isMoving: boolean;
   isJumping: boolean;
   visible: boolean;
+  hasWeapon?: boolean;
+  isShooting?: boolean;
 }
 
 export const Astronaut: React.FC<AstronautProps> = ({
@@ -18,6 +20,8 @@ export const Astronaut: React.FC<AstronautProps> = ({
   isMoving,
   isJumping,
   visible,
+  hasWeapon = false,
+  isShooting = false,
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
@@ -38,7 +42,17 @@ export const Astronaut: React.FC<AstronautProps> = ({
 
     const time = state.clock.getElapsedTime() * 8;
 
-    if (isMoving && !isJumping) {
+    if (hasWeapon) {
+      // Tactical Space Marine Combat Rifle Posture
+      const recoil = isShooting ? 0.18 : 0;
+      if (rightArmRef.current) rightArmRef.current.rotation.set(-Math.PI / 2.3 - recoil, 0, 0);
+      if (leftArmRef.current) leftArmRef.current.rotation.set(-Math.PI / 2.6 - recoil * 0.5, 0.35, -0.28);
+      if (isMoving && !isJumping) {
+        const swing = Math.sin(time) * 0.45;
+        if (leftLegRef.current) leftLegRef.current.rotation.x = swing;
+        if (rightLegRef.current) rightLegRef.current.rotation.x = -swing;
+      }
+    } else if (isMoving && !isJumping) {
       // Natural walking swing
       const swing = Math.sin(time) * 0.45;
       if (leftLegRef.current) leftLegRef.current.rotation.x = swing;
@@ -162,6 +176,29 @@ export const Astronaut: React.FC<AstronautProps> = ({
           <sphereGeometry args={[0.1, 12, 12]} />
           <meshStandardMaterial color="#64748b" roughness={0.8} />
         </mesh>
+        {/* Sci-Fi Tactical Plasma Rifle */}
+        {hasWeapon && (
+          <group position={[0, -0.62, 0.22]} rotation={[Math.PI / 2, 0, 0]}>
+            <mesh castShadow>
+              <boxGeometry args={[0.08, 0.14, 0.62]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.8} />
+            </mesh>
+            <mesh position={[0, 0.06, 0.04]}>
+              <boxGeometry args={[0.04, 0.03, 0.48]} />
+              <meshStandardMaterial color="#06b6d4" emissive="#06b6d4" emissiveIntensity={2.5} />
+            </mesh>
+            <mesh position={[0, 0, 0.34]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.024, 0.03, 0.16, 8]} />
+              <meshStandardMaterial color="#334155" metalness={0.9} />
+            </mesh>
+            {isShooting && (
+              <mesh position={[0, 0, 0.44]}>
+                <sphereGeometry args={[0.07, 8, 8]} />
+                <meshBasicMaterial color="#38bdf8" />
+              </mesh>
+            )}
+          </group>
+        )}
       </group>
 
       {/* 6. Left Leg & Lunar Overshoe Boot */}

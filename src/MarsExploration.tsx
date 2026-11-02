@@ -38,7 +38,15 @@ interface MarsExplorationProps {
     canEnterRover: boolean;
     canEnterRocket: boolean;
     roverSpeed: number;
-    alienThreat?: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean };
+    alienThreat?: {
+      count: number;
+      nearestDist: number;
+      isAttacking: boolean;
+      isFleeing?: boolean;
+      kills?: number;
+      allDead?: boolean;
+      hitConfirmed?: boolean;
+    };
   }) => void;
   astronautPosRef: React.MutableRefObject<THREE.Vector3>;
   roverPosRef: React.MutableRefObject<THREE.Vector3>;
@@ -235,7 +243,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         </group>
       )}
 
-      {/* 5. Commander Astronaut on Mars */}
+      {/* 5. Commander Astronaut on Mars with Tactical Plasma Blaster */}
       <Astronaut
         position={astronautPosRef.current}
         rotationY={astronautRotY.current}
@@ -243,6 +251,8 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         isMoving={isMoving.current}
         isJumping={isJumping.current}
         visible={playerMode === 'ASTRONAUT'}
+        hasWeapon={true}
+        isShooting={playerMode === 'ASTRONAUT' && !!keysRef.current['KeyQ']}
       />
 
       {/* 6. Realistic 3D Mars Exploration Rover Model */}
@@ -256,8 +266,11 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
       {/* 7. Proto-Xenomorph Deacon Alien Swarm */}
       <MarsAlienSwarm
         astronautPos={astronautPosRef.current}
+        astronautRotY={astronautRotY.current}
+        astronautQuat={astronautQuat.current}
         roverPos={roverPosRef.current}
         playerMode={playerMode}
+        isShooting={playerMode === 'ASTRONAUT' && !!keysRef.current['KeyQ']}
         active={isLanded && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')}
         onThreatChange={(threat) => {
           lastThreat.current = threat;

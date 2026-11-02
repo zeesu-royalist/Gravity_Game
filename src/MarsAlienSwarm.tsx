@@ -7,6 +7,8 @@ import { MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 
 const MARS_TOUCHDOWN_Y = MARS_POSITION.y + MARS_RADIUS + 0.2;
 const MODEL_URL = '/models/gastaroid_queen.glb';
+const MAX_BULLETS = 12;
+const MAX_SPARKS = 12;
 
 useGLTF.preload(MODEL_URL);
 
@@ -22,46 +24,114 @@ function getMarsElevation(x: number, z: number): number {
   return MARS_POSITION.y;
 }
 
-// Procedural Alien Screech Synthesizer
+// Ultra-lightweight Web Audio Synthesizer (Zero frame drop)
 let audioCtx: AudioContext | null = null, lastScreech = 0;
-function playScreech(isAggressive = false) {
-  const now = performance.now();
-  if (now - lastScreech < (isAggressive ? 2200 : 4800)) return;
-  lastScreech = now;
+function getAudio(): AudioContext | null {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    const t = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain(), filter = audioCtx.createBiquadFilter();
+    return audioCtx;
+  } catch (_) { return null; }
+}
+
+function playPlasmaShot() {
+  try {
+    const ctx = getAudio(); if (!ctx) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(isAggressive ? 850 : 580, t);
-    osc.frequency.exponentialRampToValueAtTime(140, t + 0.3);
-    osc.frequency.exponentialRampToValueAtTime(isAggressive ? 1100 : 750, t + 0.6);
-    osc.frequency.exponentialRampToValueAtTime(45, t + 0.9);
-    filter.type = 'bandpass'; filter.frequency.setValueAtTime(1250, t);
+    osc.frequency.setValueAtTime(800, t);
+    osc.frequency.exponentialRampToValueAtTime(100, t + 0.07);
+    gain.gain.setValueAtTime(0.12, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.07);
+  } catch (_) {}
+}
+
+function playHitImpact() {
+  try {
+    const ctx = getAudio(); if (!ctx) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(240, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.08);
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.08);
+  } catch (_) {}
+}
+
+function playAlienDeathRoar() {
+  try {
+    const ctx = getAudio(); if (!ctx) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(360, t);
+    osc.frequency.exponentialRampToValueAtTime(40, t + 1.1);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 1.1);
+  } catch (_) {}
+}
+
+function playScreech(isAggressive = false) {
+  const now = performance.now();
+  if (now - lastScreech < (isAggressive ? 2500 : 5000)) return;
+  lastScreech = now;
+  try {
+    const ctx = getAudio(); if (!ctx) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(isAggressive ? 700 : 500, t);
+    osc.frequency.exponentialRampToValueAtTime(100, t + 0.6);
     gain.gain.setValueAtTime(0.01, t);
-    gain.gain.linearRampToValueAtTime(isAggressive ? 0.2 : 0.12, t + 0.1);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
-    osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-    osc.start(t); osc.stop(t + 0.9);
+    gain.gain.linearRampToValueAtTime(isAggressive ? 0.15 : 0.08, t + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.6);
   } catch (_) {}
 }
 
 export interface MarsAlienSwarmProps {
   astronautPos: THREE.Vector3;
+  astronautRotY?: number;
+  astronautQuat?: THREE.Quaternion;
   roverPos: THREE.Vector3;
   playerMode: 'ROCKET' | 'ASTRONAUT' | 'ROVER';
+  isShooting?: boolean;
   active: boolean;
-  onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean }) => void;
+  onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean; kills?: number; allDead?: boolean }) => void;
+  onHitConfirmed?: () => void;
 }
 
 interface AlienSimData {
+  id: number;
   pos: THREE.Vector3;
   vel: THREE.Vector3;
   rotY: number;
   pitch: number;
   roll: number;
-  state: 'STALKING' | 'SPRINTING' | 'ATTACKING' | 'FLEEING';
+  health: number;
+  state: 'STALKING' | 'SPRINTING' | 'ATTACKING' | 'FLEEING' | 'DEAD';
   attackTimer: number;
+  deathTimer: number;
+  flinchTimer: number;
+}
+
+interface BulletItem {
+  active: boolean;
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  rot: THREE.Quaternion;
+  dist: number;
+}
+
+interface SparkItem {
+  active: boolean;
+  pos: THREE.Vector3;
+  life: number;
 }
 
 // Queen Instance with Independent Animation Controller & Smooth Crossfading
@@ -72,16 +142,15 @@ const QueenInstance: React.FC<{
   index: number;
 }> = ({ scene, clips, alien, index }) => {
   const rootRef = useRef<THREE.Group>(null);
-  const curAction = useRef<'Run' | 'Attack' | 'Walk'>('Run');
+  const curAction = useRef<'Run' | 'Attack' | 'Walk' | 'Die'>('Run');
 
-  // Deep clone skinned mesh hierarchy with proper skeleton bindings & zero frustum-cull flickering
   const cloned = useMemo(() => {
     const c = cloneSkeleton(scene) as THREE.Group;
     c.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        child.frustumCulled = false; // CRITICAL: Eliminates skinned-mesh camera flickering
+        child.frustumCulled = false;
       }
     });
     return c;
@@ -93,39 +162,41 @@ const QueenInstance: React.FC<{
     const run = actions['Run'];
     if (run) {
       run.reset().play();
-      // Stagger start phase so pack members don't run in identical lockstep
       run.time = (index * 0.22) % (run.getClip().duration || 1.0);
       curAction.current = 'Run';
     }
-    return () => {
-      Object.values(actions).forEach((a) => a?.stop());
-    };
+    return () => { Object.values(actions).forEach((a) => a?.stop()); };
   }, [actions, index]);
 
   useFrame(() => {
     if (!rootRef.current) return;
 
-    // 1. Smooth crossfade animation based on current behavioral state
-    const desired: 'Run' | 'Attack' | 'Walk' =
-      alien.state === 'ATTACKING' ? 'Attack' : alien.state === 'STALKING' ? 'Walk' : 'Run';
+    let desired: 'Run' | 'Attack' | 'Walk' | 'Die' = 'Run';
+    if (alien.state === 'DEAD') desired = 'Die';
+    else if (alien.state === 'ATTACKING') desired = 'Attack';
+    else if (alien.state === 'STALKING') desired = 'Walk';
 
     if (desired !== curAction.current) {
       const prev = actions[curAction.current];
       const next = actions[desired];
       if (next) {
-        next.reset().fadeIn(0.2).play();
+        if (desired === 'Die') {
+          next.setLoop(THREE.LoopOnce, 1);
+          next.clampWhenFinished = true;
+          next.reset().fadeIn(0.12).play();
+        } else {
+          next.reset().fadeIn(0.2).play();
+        }
         if (prev) prev.fadeOut(0.2);
         curAction.current = desired;
       }
     }
 
-    // Dynamic locomotion playback speed
     const activeAct = actions[curAction.current];
-    if (activeAct) {
+    if (activeAct && alien.state !== 'DEAD') {
       activeAct.timeScale = alien.state === 'ATTACKING' ? 1.5 : alien.state === 'STALKING' ? 1.15 : 1.75;
     }
 
-    // 2. Align root to Mars surface normal, heading & dune pitch
     const norm = new THREE.Vector3(alien.pos.x - MARS_POSITION.x, alien.pos.y - MARS_POSITION.y, alien.pos.z - MARS_POSITION.z).normalize();
     const fwd = new THREE.Vector3(Math.sin(alien.rotY), 0, Math.cos(alien.rotY));
     const tFwd = fwd.sub(norm.clone().multiplyScalar(fwd.dot(norm))).normalize();
@@ -136,7 +207,6 @@ const QueenInstance: React.FC<{
 
   return (
     <group ref={rootRef}>
-      {/* 3.3m Queen Scale & Ground-Contact Normalized Pivot Offset */}
       <group position={[-4.05, 1.625, 4.45]} scale={[0.005, 0.005, 0.005]}>
         <group rotation={[0, -Math.PI / 4, 0]}>
           <primitive object={cloned} />
@@ -148,34 +218,35 @@ const QueenInstance: React.FC<{
 
 export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   astronautPos,
+  astronautRotY = 0,
+  astronautQuat,
   roverPos,
   playerMode,
+  isShooting = false,
   active,
   onThreatChange,
+  onHitConfirmed,
 }) => {
   const lastThreatUpdate = useRef(0);
+  const lastShoot = useRef(0);
+
   const { scene: masterScene, animations } = useGLTF(MODEL_URL);
 
-  // Split master multi-take animation into clean in-place subclips (Zero teleport jumps)
   const clips = useMemo(() => {
     if (!animations || animations.length === 0) return [];
     const origClip = animations[0];
-    // Remove root_01_8.position track to eliminate teleport jumps & snapping
     const filteredTracks = origClip.tracks.filter((t) => !t.name.includes('root_01_8.position'));
     const cleanClip = new THREE.AnimationClip('CleanBase', origClip.duration, filteredTracks);
 
     const fps = 30;
-    // 12.0s to 13.0s => frame 360 to 390: Perfect seamless Run cycle
     const runClip = THREE.AnimationUtils.subclip(cleanClip, 'Run', 360, 390, fps);
-    // 22.0s to 23.5s => frame 660 to 705: Furious claw slash & bite Attack cycle
     const attackClip = THREE.AnimationUtils.subclip(cleanClip, 'Attack', 660, 705, fps);
-    // 7.0s to 10.0s => frame 210 to 300: Predatory stalking Walk cycle
     const walkClip = THREE.AnimationUtils.subclip(cleanClip, 'Walk', 210, 300, fps);
+    const dieClip = THREE.AnimationUtils.subclip(cleanClip, 'Die', 1380, 1420, fps);
 
-    return [runClip, attackClip, walkClip];
+    return [runClip, attackClip, walkClip, dieClip];
   }, [animations]);
 
-  // Optimize material specular & shadows once on master scene
   useMemo(() => {
     masterScene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -190,31 +261,188 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
     });
   }, [masterScene]);
 
-  // Pack of 5 Predators with physical inertia & kinematic states
+  // Pack of 5 Alien Queens (100 HP each, takes exactly 5 shots to kill at 20 dmg/shot)
   const aliens = useRef<AlienSimData[]>([
-    { pos: new THREE.Vector3(MARS_POSITION.x + 24, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 20), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
-    { pos: new THREE.Vector3(MARS_POSITION.x - 26, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 18), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
-    { pos: new THREE.Vector3(MARS_POSITION.x + 28, MARS_TOUCHDOWN_Y, MARS_POSITION.z - 22), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
-    { pos: new THREE.Vector3(MARS_POSITION.x - 24, MARS_TOUCHDOWN_Y, MARS_POSITION.z - 24), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
-    { pos: new THREE.Vector3(MARS_POSITION.x + 12, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 32), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
+    { id: 0, pos: new THREE.Vector3(MARS_POSITION.x + 24, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 20), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, health: 100, state: 'SPRINTING', attackTimer: 0, deathTimer: 0, flinchTimer: 0 },
+    { id: 1, pos: new THREE.Vector3(MARS_POSITION.x - 26, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 18), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, health: 100, state: 'SPRINTING', attackTimer: 0, deathTimer: 0, flinchTimer: 0 },
+    { id: 2, pos: new THREE.Vector3(MARS_POSITION.x + 28, MARS_TOUCHDOWN_Y, MARS_POSITION.z - 22), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, health: 100, state: 'SPRINTING', attackTimer: 0, deathTimer: 0, flinchTimer: 0 },
+    { id: 3, pos: new THREE.Vector3(MARS_POSITION.x - 24, MARS_TOUCHDOWN_Y, MARS_POSITION.z - 24), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, health: 100, state: 'SPRINTING', attackTimer: 0, deathTimer: 0, flinchTimer: 0 },
+    { id: 4, pos: new THREE.Vector3(MARS_POSITION.x + 12, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 32), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, health: 100, state: 'SPRINTING', attackTimer: 0, deathTimer: 0, flinchTimer: 0 },
   ]);
 
-  // Master Unified 60 FPS Simulation Loop
+  // Zero-allocation preallocated object pools (60 FPS, No React State re-rendering)
+  const bulletsRef = useRef<BulletItem[]>(
+    Array.from({ length: MAX_BULLETS }, () => ({
+      active: false,
+      pos: new THREE.Vector3(),
+      vel: new THREE.Vector3(),
+      rot: new THREE.Quaternion(),
+      dist: 0,
+    }))
+  );
+
+  const sparksRef = useRef<SparkItem[]>(
+    Array.from({ length: MAX_SPARKS }, () => ({
+      active: false,
+      pos: new THREE.Vector3(),
+      life: 0,
+    }))
+  );
+
+  const bulletsMeshRef = useRef<THREE.InstancedMesh>(null);
+  const sparksMeshRef = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  // Master Unified 60 FPS Combat, Kinematics & AI Loop
   useFrame(({ clock }, delta) => {
     if (!active || playerMode === 'ROCKET') return;
 
-    const dt = Math.min(0.05, delta);
-    const decay = 1.0 - Math.exp(-5.5 * dt); // Exponential frame-rate independent physics
+    const dt = Math.min(0.04, delta);
+    const decay = 1.0 - Math.exp(-5.5 * dt);
     const time = clock.getElapsedTime();
     const targetPos = playerMode === 'ROVER' ? roverPos : astronautPos;
+    const alienList = aliens.current;
     let minDistance = 9999, anyAttacking = false, anyFleeing = false;
+    let aliveCount = 0;
 
-    // 1. Quadratic Soft-Flocking Separation (Zero clipping or jitter)
-    for (let i = 0; i < aliens.current.length; i++) {
-      for (let j = i + 1; j < aliens.current.length; j++) {
-        const a1 = aliens.current[i], a2 = aliens.current[j];
+    // 1. Plasma Rifle Shooting Trigger (Key 'Q')
+    if (isShooting && playerMode === 'ASTRONAUT') {
+      const now = performance.now();
+      if (now - lastShoot.current > 180) { // ~5.5 rounds/sec
+        lastShoot.current = now;
+
+        const q = astronautQuat || new THREE.Quaternion().setFromEuler(new THREE.Euler(0, astronautRotY, 0));
+        const gunOffset = new THREE.Vector3(0.35, 1.35, 0.4).applyQuaternion(q);
+        const origin = astronautPos.clone().add(gunOffset);
+        let fireDir = new THREE.Vector3(0, 0, 1).applyQuaternion(q).normalize();
+
+        // Target assist within short combat range (<= 22m)
+        let bestTarget: THREE.Vector3 | null = null;
+        let bestAngle = 0.45;
+        for (const al of alienList) {
+          if (al.state === 'DEAD') continue;
+          const alCenter = al.pos.clone().add(new THREE.Vector3(0, 1.6, 0));
+          const toAl = alCenter.clone().sub(origin);
+          const d = toAl.length();
+          if (d < 22.0) {
+            toAl.normalize();
+            const angle = fireDir.angleTo(toAl);
+            if (angle < bestAngle) {
+              bestAngle = angle;
+              bestTarget = toAl;
+            }
+          }
+        }
+        if (bestTarget) {
+          fireDir.lerp(bestTarget, 0.7).normalize();
+        }
+
+        // Find available preallocated bullet slot
+        const freeBullet = bulletsRef.current.find((b) => !b.active);
+        if (freeBullet) {
+          freeBullet.active = true;
+          freeBullet.pos.copy(origin);
+          freeBullet.vel.copy(fireDir).multiplyScalar(75.0); // Fast punchy bolt
+          freeBullet.rot.setFromUnitVectors(new THREE.Vector3(0, 1, 0), fireDir);
+          freeBullet.dist = 0;
+          playPlasmaShot();
+        }
+      }
+    }
+
+    // 2. Bullets Simulation & Collision Detection
+    const bList = bulletsRef.current;
+    for (let i = 0; i < MAX_BULLETS; i++) {
+      const b = bList[i];
+      if (!b.active) continue;
+
+      b.pos.addScaledVector(b.vel, dt);
+      b.dist += 75.0 * dt;
+
+      let hit = false;
+      for (const al of alienList) {
+        if (al.state === 'DEAD') continue;
+        const alCenter = al.pos.clone().add(new THREE.Vector3(0, 1.6, 0));
+        if (b.pos.distanceTo(alCenter) < 2.4) {
+          hit = true;
+          al.health = Math.max(0, al.health - 20); // Exactly 5 hits to kill (100 -> 80 -> 60 -> 40 -> 20 -> 0)
+          al.flinchTimer = 0.2;
+          playHitImpact();
+          if (onHitConfirmed) onHitConfirmed();
+
+          const freeSpark = sparksRef.current.find((s) => !s.active);
+          if (freeSpark) {
+            freeSpark.active = true;
+            freeSpark.pos.copy(b.pos);
+            freeSpark.life = 0.2;
+          }
+
+          if (al.health <= 0) {
+            al.state = 'DEAD';
+            al.vel.set(0, 0, 0);
+            playAlienDeathRoar();
+          }
+          break;
+        }
+      }
+
+      // Bullets expire after 22 meters ("thodi dur tak hi jaye") or upon hit / terrain contact
+      if (hit || b.dist > 22.0 || b.pos.y < getMarsElevation(b.pos.x, b.pos.z)) {
+        b.active = false;
+      }
+    }
+
+    // 3. Fast GPU Instanced Matrix Update for Bullets
+    if (bulletsMeshRef.current) {
+      for (let i = 0; i < MAX_BULLETS; i++) {
+        const b = bList[i];
+        if (b.active) {
+          dummy.position.copy(b.pos);
+          dummy.quaternion.copy(b.rot);
+          dummy.scale.set(1, 1, 1);
+        } else {
+          dummy.position.set(0, -9999, 0);
+          dummy.scale.set(0, 0, 0);
+        }
+        dummy.updateMatrix();
+        bulletsMeshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      bulletsMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    // 4. Fast GPU Instanced Matrix Update for Impact Sparks
+    if (sparksMeshRef.current) {
+      const sList = sparksRef.current;
+      for (let i = 0; i < MAX_SPARKS; i++) {
+        const s = sList[i];
+        if (s.active) {
+          s.life -= dt;
+          if (s.life <= 0) {
+            s.active = false;
+            dummy.scale.set(0, 0, 0);
+          } else {
+            dummy.position.copy(s.pos);
+            const scale = s.life * 3.5;
+            dummy.scale.set(scale, scale, scale);
+          }
+        } else {
+          dummy.position.set(0, -9999, 0);
+          dummy.scale.set(0, 0, 0);
+        }
+        dummy.updateMatrix();
+        sparksMeshRef.current.setMatrixAt(i, dummy.matrix);
+      }
+      sparksMeshRef.current.instanceMatrix.needsUpdate = true;
+    }
+
+    // 5. Flocking Separation
+    for (let i = 0; i < alienList.length; i++) {
+      if (alienList[i].state === 'DEAD') continue;
+      for (let j = i + 1; j < alienList.length; j++) {
+        if (alienList[j].state === 'DEAD') continue;
+        const a1 = alienList[i], a2 = alienList[j];
         const dx = a1.pos.x - a2.pos.x, dz = a1.pos.z - a2.pos.z, dSq = dx * dx + dz * dz;
-        if (dSq < 23.04 && dSq > 0.001) { // 4.8m radius
+        if (dSq < 23.04 && dSq > 0.001) {
           const d = Math.sqrt(dSq), push = ((4.8 - d) / 4.8) ** 2 * 18.0 * dt;
           a1.vel.x += (dx / d) * push; a1.vel.z += (dz / d) * push;
           a2.vel.x -= (dx / d) * push; a2.vel.z -= (dz / d) * push;
@@ -222,13 +450,20 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
       }
     }
 
-    // 2. AI Hunting Waves, Kinematics & Realistic Surface Conform
-    for (let i = 0; i < aliens.current.length; i++) {
-      const a = aliens.current[i];
+    // 6. Kinematics & AI Behaviors
+    for (let i = 0; i < alienList.length; i++) {
+      const a = alienList[i];
+      if (a.state === 'DEAD') {
+        a.vel.set(0, 0, 0);
+        a.deathTimer += dt;
+        continue;
+      }
+      aliveCount++;
+
       const toX = targetPos.x - a.pos.x, toZ = targetPos.z - a.pos.z, dist = Math.hypot(toX, toZ);
       if (dist < minDistance) minDistance = dist;
 
-      // Hit & Run Predatory Wave Cycle: 0-11s attack, 11-18s dune retreat & regroup
+      // Hit & Run Wave Cycle
       const isRetreat = ((time + i * 1.6) % 18.0) > 11.0;
       let dirX = toX / (dist || 1), dirZ = toZ / (dist || 1), speed = 16.5;
 
@@ -247,13 +482,11 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
         speed = dist < 28.0 ? 17.5 : 10.5;
       }
 
-      // Smooth exponential velocity lerp
       a.vel.x += (dirX * speed - a.vel.x) * decay;
       a.vel.z += (dirZ * speed - a.vel.z) * decay;
       a.pos.x += a.vel.x * dt;
       a.pos.z += a.vel.z * dt;
 
-      // Heading rotation with realistic banking roll into turns
       const currentSpeed = Math.hypot(a.vel.x, a.vel.z);
       if (currentSpeed > 0.5) {
         let diff = Math.atan2(a.vel.x, a.vel.z) - a.rotY;
@@ -263,20 +496,26 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
         a.roll = THREE.MathUtils.clamp(-diff * 0.4, -0.25, 0.25);
       }
 
-      // Terrain elevation conforming & slope pitch
       const elev = getMarsElevation(a.pos.x, a.pos.z);
       a.pos.y = elev;
       const slope = (getMarsElevation(a.pos.x + dirX * 1.5, a.pos.z + dirZ * 1.5) - elev) / 1.5;
       a.pitch = -slope * 0.45 + (a.state === 'ATTACKING' ? 0.2 + Math.sin(a.attackTimer * 4) * 0.08 : 0.1);
     }
 
-    if (minDistance < 28) playScreech(anyAttacking);
+    if (minDistance < 28 && aliveCount > 0) playScreech(anyAttacking);
 
-    // Stable HUD threat reporting (throttled to 5 Hz)
-    const now = performance.now();
-    if (onThreatChange && now - lastThreatUpdate.current > 200) {
-      lastThreatUpdate.current = now;
-      onThreatChange({ count: aliens.current.length, nearestDist: Math.round(minDistance), isAttacking: anyAttacking, isFleeing: anyFleeing });
+    // Throttled HUD Combat Telemetry
+    const nowTime = performance.now();
+    if (onThreatChange && nowTime - lastThreatUpdate.current > 200) {
+      lastThreatUpdate.current = nowTime;
+      onThreatChange({
+        count: aliveCount,
+        nearestDist: aliveCount > 0 ? Math.round(minDistance) : 0,
+        isAttacking: anyAttacking && aliveCount > 0,
+        isFleeing: anyFleeing,
+        kills: alienList.length - aliveCount,
+        allDead: aliveCount === 0,
+      });
     }
   });
 
@@ -284,6 +523,7 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
 
   return (
     <group>
+      {/* 1. Alien Queen Pack Members */}
       {aliens.current.map((alien, idx) => (
         <QueenInstance
           key={idx}
@@ -293,6 +533,18 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
           index={idx}
         />
       ))}
+
+      {/* 2. Instanced Plasma Bullets (Zero State Re-renders, Zero Dynamic PointLights, Locked 60 FPS) */}
+      <instancedMesh ref={bulletsMeshRef} args={[undefined, undefined, MAX_BULLETS]} frustumCulled={false}>
+        <cylinderGeometry args={[0.045, 0.045, 1.1, 6]} />
+        <meshBasicMaterial color="#38bdf8" />
+      </instancedMesh>
+
+      {/* 3. Instanced Plasma Hit Sparks (Zero Lag) */}
+      <instancedMesh ref={sparksMeshRef} args={[undefined, undefined, MAX_SPARKS]} frustumCulled={false}>
+        <sphereGeometry args={[0.22, 6, 6]} />
+        <meshBasicMaterial color="#fb923c" transparent opacity={0.8} />
+      </instancedMesh>
     </group>
   );
 };
