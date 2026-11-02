@@ -28,9 +28,10 @@ export const Astronaut: React.FC<AstronautProps> = ({
   const rightLegRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Group>(null);
   const rightArmRef = useRef<THREE.Group>(null);
+  const lastPos = useRef(new THREE.Vector3());
 
   // Walking and lunar hop animation
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!groupRef.current) return;
 
     groupRef.current.position.copy(position);
@@ -40,6 +41,11 @@ export const Astronaut: React.FC<AstronautProps> = ({
       groupRef.current.rotation.set(0, rotationY, 0);
     }
 
+    const dt = Math.min(0.1, delta);
+    const distMoved = lastPos.current.distanceTo(position);
+    lastPos.current.copy(position);
+    const isActuallyMoving = (distMoved > 0.005 || isMoving) && distMoved > 0.0005;
+
     const time = state.clock.getElapsedTime() * 8;
 
     if (hasWeapon) {
@@ -47,12 +53,19 @@ export const Astronaut: React.FC<AstronautProps> = ({
       const recoil = isShooting ? 0.18 : 0;
       if (rightArmRef.current) rightArmRef.current.rotation.set(-Math.PI / 2.3 - recoil, 0, 0);
       if (leftArmRef.current) leftArmRef.current.rotation.set(-Math.PI / 2.6 - recoil * 0.5, 0.35, -0.28);
-      if (isMoving && !isJumping) {
+      if (isActuallyMoving && !isJumping) {
         const swing = Math.sin(time) * 0.45;
         if (leftLegRef.current) leftLegRef.current.rotation.x = swing;
         if (rightLegRef.current) rightLegRef.current.rotation.x = -swing;
+      } else if (isJumping) {
+        if (leftLegRef.current) leftLegRef.current.rotation.x = 0.35;
+        if (rightLegRef.current) rightLegRef.current.rotation.x = 0.2;
+      } else {
+        // Idle standing: immediately lerp legs back to 0
+        if (leftLegRef.current) leftLegRef.current.rotation.x = THREE.MathUtils.lerp(leftLegRef.current.rotation.x, 0, dt * 18);
+        if (rightLegRef.current) rightLegRef.current.rotation.x = THREE.MathUtils.lerp(rightLegRef.current.rotation.x, 0, dt * 18);
       }
-    } else if (isMoving && !isJumping) {
+    } else if (isActuallyMoving && !isJumping) {
       // Natural walking swing
       const swing = Math.sin(time) * 0.45;
       if (leftLegRef.current) leftLegRef.current.rotation.x = swing;
@@ -66,11 +79,11 @@ export const Astronaut: React.FC<AstronautProps> = ({
       if (leftArmRef.current) leftArmRef.current.rotation.x = -0.4;
       if (rightArmRef.current) rightArmRef.current.rotation.x = -0.4;
     } else {
-      // Idle standing
-      if (leftLegRef.current) leftLegRef.current.rotation.x = 0;
-      if (rightLegRef.current) rightLegRef.current.rotation.x = 0;
-      if (leftArmRef.current) leftArmRef.current.rotation.x = 0;
-      if (rightArmRef.current) rightArmRef.current.rotation.x = 0;
+      // Idle standing: immediately lerp legs and arms back to 0
+      if (leftLegRef.current) leftLegRef.current.rotation.x = THREE.MathUtils.lerp(leftLegRef.current.rotation.x, 0, dt * 18);
+      if (rightLegRef.current) rightLegRef.current.rotation.x = THREE.MathUtils.lerp(rightLegRef.current.rotation.x, 0, dt * 18);
+      if (leftArmRef.current) leftArmRef.current.rotation.x = THREE.MathUtils.lerp(leftArmRef.current.rotation.x, 0, dt * 18);
+      if (rightArmRef.current) rightArmRef.current.rotation.x = THREE.MathUtils.lerp(rightArmRef.current.rotation.x, 0, dt * 18);
     }
   });
 

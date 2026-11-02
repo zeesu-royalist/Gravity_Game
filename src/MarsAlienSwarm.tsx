@@ -9,6 +9,8 @@ const MARS_TOUCHDOWN_Y = MARS_POSITION.y + MARS_RADIUS + 0.2;
 const MODEL_URL = '/models/gastaroid_queen.glb';
 const MAX_BULLETS = 12;
 const MAX_SPARKS = 12;
+const BULLET_SPEED = 75.0;
+const BULLET_MAX_DIST = 22.0;
 
 useGLTF.preload(MODEL_URL);
 
@@ -94,6 +96,23 @@ function playScreech(isAggressive = false) {
   } catch (_) {}
 }
 
+// Module-level scratch memory for zero-allocation performance
+const _qNorm = new THREE.Vector3();
+const _qFwd = new THREE.Vector3();
+const _qTFwd = new THREE.Vector3();
+const _qRight = new THREE.Vector3();
+const _qMat = new THREE.Matrix4();
+const _qRot = new THREE.Quaternion();
+const _qPitchRoll = new THREE.Quaternion();
+const _qEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+const _gunOff = new THREE.Vector3();
+const _fireDir = new THREE.Vector3();
+const _targetDir = new THREE.Vector3();
+const _upVec = new THREE.Vector3(0, 1, 0);
+const _tempQuat = new THREE.Quaternion();
+const _tempEuler = new THREE.Euler();
+
 export interface MarsAlienSwarmProps {
   astronautPos: THREE.Vector3;
   astronautRotY?: number;
@@ -103,7 +122,6 @@ export interface MarsAlienSwarmProps {
   isShooting?: boolean;
   active: boolean;
   onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean; kills?: number; allDead?: boolean }) => void;
-  onHitConfirmed?: () => void;
 }
 
 interface AlienSimData {
@@ -134,7 +152,7 @@ interface SparkItem {
   life: number;
 }
 
-// Queen Instance with Independent Animation Controller & Smooth Crossfading
+// Queen Instance with Independent Animation Controller & Zero-GC Surface Alignment
 const QueenInstance: React.FC<{
   scene: THREE.Group;
   clips: THREE.AnimationClip[];
@@ -200,12 +218,20 @@ const QueenInstance: React.FC<{
       activeAct.timeScale = alien.state === 'ATTACKING' ? 1.5 : alien.state === 'STALKING' ? 1.15 : 1.75;
     }
 
-    const norm = new THREE.Vector3(alien.pos.x - MARS_POSITION.x, alien.pos.y - MARS_POSITION.y, alien.pos.z - MARS_POSITION.z).normalize();
-    const fwd = new THREE.Vector3(Math.sin(alien.rotY), 0, Math.cos(alien.rotY));
-    const tFwd = fwd.sub(norm.clone().multiplyScalar(fwd.dot(norm))).normalize();
+    // Zero-allocation surface orientation
+    _qNorm.set(alien.pos.x - MARS_POSITION.x, alien.pos.y - MARS_POSITION.y, alien.pos.z - MARS_POSITION.z).normalize();
+    _qFwd.set(Math.sin(alien.rotY), 0, Math.cos(alien.rotY));
+    const dot = _qFwd.dot(_qNorm);
+    _qTFwd.copy(_qFwd).addScaledVector(_qNorm, -dot).normalize();
+    _qRight.crossVectors(_qNorm, _qTFwd).normalize();
+    _qMat.makeBasis(_qRight, _qNorm, _qTFwd);
+    _qRot.setFromRotationMatrix(_qMat);
+    _qEuler.set(alien.pitch, 0, alien.roll, 'YXZ');
+    _qPitchRoll.setFromEuler(_qEuler);
+    _qRot.multiply(_qPitchRoll);
+
     rootRef.current.position.set(alien.pos.x, alien.pos.y, alien.pos.z);
-    rootRef.current.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(norm, tFwd).normalize(), norm, tFwd))
-      .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(alien.pitch, 0, alien.roll, 'YXZ')));
+    rootRef.current.quaternion.copy(_qRot);
   });
 
   return (
@@ -228,7 +254,6 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   isShooting = false,
   active,
   onThreatChange,
-  onHitConfirmed,
 }) => {
   const lastThreatUpdate = useRef(0);
   const lastShoot = useRef(0);
@@ -296,9 +321,10 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   const sparksMeshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const prevPlayerMode = useRef(playerMode);
+  const prevActive = useRef(active);
 
   // 1. Rocket me baith ke utarne ke baad aliens phir se jinda ho jaye
-  if (prevPlayerMode.current === 'ROCKET' && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')) {
+  const resetAliens = () => {
     const spawns = [
       { x: 24, z: 20 },
       { x: -26, z: 18 },
@@ -320,8 +346,13 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
     });
     bulletsRef.current.forEach((b) => { b.active = false; });
     sparksRef.current.forEach((s) => { s.active = false; });
+  };
+
+  if ((prevPlayerMode.current === 'ROCKET' || !prevActive.current) && active && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')) {
+    resetAliens();
   }
   prevPlayerMode.current = playerMode;
+  prevActive.current = active;
 
   // Master Unified 60 FPS Combat, Kinematics & AI Loop
   useFrame(({ clock }, delta) => {
@@ -335,70 +366,87 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
     let minDistance = 9999, anyAttacking = false, anyFleeing = false;
     let aliveCount = 0;
 
-    // 1. Plasma Rifle Shooting Trigger (Key 'Q')
-    if (isShooting && playerMode === 'ASTRONAUT') {
+    // 1. Plasma Rifle Shooting Trigger (Key 'Q') - Only shoots while hostile aliens are active
+    const hasAliveEnemies = alienList.some((a) => a.state !== 'DEAD');
+    if (isShooting && playerMode === 'ASTRONAUT' && hasAliveEnemies) {
       const now = performance.now();
       if (now - lastShoot.current > 180) { // ~5.5 rounds/sec
         lastShoot.current = now;
 
-        const q = astronautQuat || new THREE.Quaternion().setFromEuler(new THREE.Euler(0, astronautRotY, 0));
-        const gunOffset = new THREE.Vector3(0.35, 1.35, 0.4).applyQuaternion(q);
-        const origin = astronautPos.clone().add(gunOffset);
-        let fireDir = new THREE.Vector3(0, 0, 1).applyQuaternion(q).normalize();
+        const q = astronautQuat || _tempQuat.setFromEuler(_tempEuler.set(0, astronautRotY, 0));
+        _gunOff.set(0.35, 1.35, 0.4).applyQuaternion(q);
+        const originX = astronautPos.x + _gunOff.x;
+        const originY = astronautPos.y + _gunOff.y;
+        const originZ = astronautPos.z + _gunOff.z;
 
-        // Target assist within short combat range (<= 22m)
-        let bestTarget: THREE.Vector3 | null = null;
+        _fireDir.set(0, 0, 1).applyQuaternion(q).normalize();
+
+        // Target assist within short combat range (<= 22m) - Zero GC
+        let bestTargetX = 0, bestTargetY = 0, bestTargetZ = 0;
+        let hasTarget = false;
         let bestAngle = 0.45;
-        for (const al of alienList) {
+
+        for (let i = 0; i < alienList.length; i++) {
+          const al = alienList[i];
           if (al.state === 'DEAD') continue;
-          const alCenter = al.pos.clone().add(new THREE.Vector3(0, 1.6, 0));
-          const toAl = alCenter.clone().sub(origin);
-          const d = toAl.length();
-          if (d < 22.0) {
-            toAl.normalize();
-            const angle = fireDir.angleTo(toAl);
+          const toX = al.pos.x - originX;
+          const toY = (al.pos.y + 1.6) - originY;
+          const toZ = al.pos.z - originZ;
+          const distSq = toX * toX + toY * toY + toZ * toZ;
+          if (distSq < 484.0) { // 22m range
+            const invDist = 1 / Math.sqrt(distSq);
+            _targetDir.set(toX * invDist, toY * invDist, toZ * invDist);
+            const angle = _fireDir.angleTo(_targetDir);
             if (angle < bestAngle) {
               bestAngle = angle;
-              bestTarget = toAl;
+              bestTargetX = _targetDir.x;
+              bestTargetY = _targetDir.y;
+              bestTargetZ = _targetDir.z;
+              hasTarget = true;
             }
           }
         }
-        if (bestTarget) {
-          fireDir.lerp(bestTarget, 0.7).normalize();
+        if (hasTarget) {
+          _targetDir.set(bestTargetX, bestTargetY, bestTargetZ);
+          _fireDir.lerp(_targetDir, 0.7).normalize();
         }
 
         // Find available preallocated bullet slot
         const freeBullet = bulletsRef.current.find((b) => !b.active);
         if (freeBullet) {
           freeBullet.active = true;
-          freeBullet.pos.copy(origin);
-          freeBullet.vel.copy(fireDir).multiplyScalar(75.0); // Fast punchy bolt
-          freeBullet.rot.setFromUnitVectors(new THREE.Vector3(0, 1, 0), fireDir);
+          freeBullet.pos.set(originX, originY, originZ);
+          freeBullet.vel.copy(_fireDir).multiplyScalar(BULLET_SPEED);
+          freeBullet.rot.setFromUnitVectors(_upVec, _fireDir);
           freeBullet.dist = 0;
           playPlasmaShot();
         }
       }
     }
 
-    // 2. Bullets Simulation & Collision Detection
+    // 2. Bullets Simulation & Collision Detection - Zero GC
     const bList = bulletsRef.current;
     for (let i = 0; i < MAX_BULLETS; i++) {
       const b = bList[i];
       if (!b.active) continue;
 
       b.pos.addScaledVector(b.vel, dt);
-      b.dist += 75.0 * dt;
+      b.dist += BULLET_SPEED * dt;
 
       let hit = false;
-      for (const al of alienList) {
+      for (let aIdx = 0; aIdx < alienList.length; aIdx++) {
+        const al = alienList[aIdx];
         if (al.state === 'DEAD') continue;
-        const alCenter = al.pos.clone().add(new THREE.Vector3(0, 1.6, 0));
-        if (b.pos.distanceTo(alCenter) < 2.4) {
+        const dx = b.pos.x - al.pos.x;
+        const dy = b.pos.y - (al.pos.y + 1.6);
+        const dz = b.pos.z - al.pos.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+
+        if (distSq < 5.76) { // 2.4m radius
           hit = true;
           al.health = Math.max(0, al.health - 20); // Exactly 5 hits to kill (100 -> 80 -> 60 -> 40 -> 20 -> 0)
           al.flinchTimer = 0.2;
           playHitImpact();
-          if (onHitConfirmed) onHitConfirmed();
 
           const freeSpark = sparksRef.current.find((s) => !s.active);
           if (freeSpark) {
@@ -411,13 +459,19 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
             al.state = 'DEAD';
             al.vel.set(0, 0, 0);
             playAlienDeathRoar();
+
+            // If the last living queen was just defeated, immediately halt firing loop
+            const stillAlive = alienList.some((x) => x.state !== 'DEAD');
+            if (!stillAlive) {
+              lastShoot.current = performance.now() + 1000;
+            }
           }
           break;
         }
       }
 
       // Bullets expire after 22 meters ("thodi dur tak hi jaye") or upon hit / terrain contact
-      if (hit || b.dist > 22.0 || b.pos.y < getMarsElevation(b.pos.x, b.pos.z)) {
+      if (hit || b.dist > BULLET_MAX_DIST || b.pos.y < getMarsElevation(b.pos.x, b.pos.z)) {
         b.active = false;
       }
     }

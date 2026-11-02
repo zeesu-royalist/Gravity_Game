@@ -238,13 +238,24 @@ export default function App() {
     setStats({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON', stage: 'STANDBY ON EARTH PAD' });
   };
 
+  const isFlyingRef = useRef(isFlying);
+  isFlyingRef.current = isFlying;
+  const isLandedRef = useRef(isLanded);
+  isLandedRef.current = isLanded;
+  const playerModeRef = useRef(playerMode);
+  playerModeRef.current = playerMode;
+  const autopilotRef = useRef(autopilot);
+  autopilotRef.current = autopilot;
+  const hudStateRef = useRef(hudState);
+  hudStateRef.current = hudState;
+
   const handleInteraction = () => {
-    if (isFlying) return;
-    if (playerMode === 'ROCKET') setPlayerMode('ASTRONAUT');
-    else if (playerMode === 'ASTRONAUT') {
-      if (hudState.canEnterRover) setPlayerMode('ROVER');
-      else if (hudState.canEnterRocket) setPlayerMode('ROCKET');
-    } else if (playerMode === 'ROVER') {
+    if (isFlyingRef.current) return;
+    if (playerModeRef.current === 'ROCKET') setPlayerMode('ASTRONAUT');
+    else if (playerModeRef.current === 'ASTRONAUT') {
+      if (hudStateRef.current.canEnterRover) setPlayerMode('ROVER');
+      else if (hudStateRef.current.canEnterRocket) setPlayerMode('ROCKET');
+    } else if (playerModeRef.current === 'ROVER') {
       setPlayerMode('ASTRONAUT');
     }
   };
@@ -253,25 +264,38 @@ export default function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current[e.code] = true;
       if (e.code === 'KeyE') handleInteraction();
-      if (playerMode === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlying))) handleLaunch();
+      if (playerModeRef.current === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlyingRef.current))) handleLaunch();
       if (e.code === 'KeyR') handleReset();
-      if (playerMode === 'ROCKET' && e.code === 'KeyT') setAutopilot((p) => !p);
-      if (playerMode === 'ROCKET') {
+      if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') setAutopilot((p) => !p);
+      if (playerModeRef.current === 'ROCKET') {
         if (e.code.startsWith('Shift')) setThrottle((p) => Math.min(1.0, p + 0.15));
         if (e.code.startsWith('Control')) setThrottle((p) => Math.max(0.1, p - 0.15));
-        if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) && autopilot) {
+        if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) && autopilotRef.current) {
           setAutopilot(false);
         }
       }
     };
-    const onKeyUp = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
+    const onKeyUp = (e: KeyboardEvent) => {
+      keysRef.current[e.code] = false;
+    };
+    const onBlur = () => {
+      keysRef.current = {};
+    };
+    const onPointerUp = () => {
+      keysRef.current['KeyQ'] = false;
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('pointerup', onPointerUp);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('pointerup', onPointerUp);
     };
-  }, [isFlying, isLanded, playerMode, autopilot, hudState, destination, currentWorld]);
+  }, []);
 
   // Flight Physics & Autopilot Loop
   useEffect(() => {
@@ -610,6 +634,7 @@ export default function App() {
           <button
             onMouseDown={() => handleDpad('KeyQ', true)}
             onMouseUp={() => handleDpad('KeyQ', false)}
+            onMouseLeave={() => handleDpad('KeyQ', false)}
             onTouchStart={() => handleDpad('KeyQ', true)}
             onTouchEnd={() => handleDpad('KeyQ', false)}
             className="px-5 py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:scale-95 text-white font-bold font-mono text-xs tracking-wider rounded-xl border border-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.6)] cursor-pointer flex items-center gap-2 select-none"

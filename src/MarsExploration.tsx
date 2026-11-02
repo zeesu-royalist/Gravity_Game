@@ -274,6 +274,9 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         active={isLanded && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')}
         onThreatChange={(threat) => {
           lastThreat.current = threat;
+          if (threat.allDead && keysRef.current) {
+            keysRef.current['KeyQ'] = false;
+          }
           onUpdateHUD({
             astronautPos: astronautPosRef.current,
             roverPos: roverPosRef.current,
