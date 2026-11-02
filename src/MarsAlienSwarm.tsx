@@ -1,15 +1,18 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 
 const MARS_TOUCHDOWN_Y = MARS_POSITION.y + MARS_RADIUS + 0.2;
-const MARS_LANDING_SITE = new THREE.Vector3(MARS_POSITION.x, MARS_TOUCHDOWN_Y, MARS_POSITION.z);
+const MODEL_URL = '/models/gastaroid_queen.glb';
+
+useGLTF.preload(MODEL_URL);
 
 // Mars terrain elevation conforming
-function getMarsSurfaceElevation(x: number, z: number): number {
-  const dx = x - MARS_POSITION.x, dz = z - MARS_POSITION.z;
-  const dSq = dx * dx + dz * dz, r = MARS_RADIUS;
+function getMarsElevation(x: number, z: number): number {
+  const dx = x - MARS_POSITION.x, dz = z - MARS_POSITION.z, dSq = dx * dx + dz * dz, r = MARS_RADIUS;
   if (dSq <= 900) return MARS_TOUCHDOWN_Y;
   if (dSq < r * r) {
     const d = Math.sqrt(dSq);
@@ -19,70 +22,28 @@ function getMarsSurfaceElevation(x: number, z: number): number {
   return MARS_POSITION.y;
 }
 
-// Mars surface normal quaternion alignment
-function getMarsSurfaceQuat(x: number, z: number, heading: number): THREE.Quaternion {
-  const normal = new THREE.Vector3(x - MARS_POSITION.x, getMarsSurfaceElevation(x, z) - MARS_POSITION.y, z - MARS_POSITION.z).normalize();
-  const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-  const tFwd = fwd.sub(normal.clone().multiplyScalar(fwd.dot(normal))).normalize();
-  return new THREE.Quaternion().setFromRotationMatrix(
-    new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(normal, tFwd).normalize(), normal, tFwd)
-  );
-}
-
-// Web Audio API Procedural Alien Screech Synthesizer
-let audioCtx: AudioContext | null = null;
-let lastScreechTime = 0;
-
-function playAlienScreech(isAggressive = false) {
+// Procedural Alien Screech Synthesizer
+let audioCtx: AudioContext | null = null, lastScreech = 0;
+function playScreech(isAggressive = false) {
   const now = performance.now();
-  if (now - lastScreechTime < (isAggressive ? 2200 : 4500)) return;
-  lastScreechTime = now;
-
+  if (now - lastScreech < (isAggressive ? 2200 : 4800)) return;
+  lastScreech = now;
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    const filter = audioCtx.createBiquadFilter();
-
+    const t = audioCtx.currentTime, osc = audioCtx.createOscillator(), gain = audioCtx.createGain(), filter = audioCtx.createBiquadFilter();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(isAggressive ? 780 : 540, t);
-    osc.frequency.exponentialRampToValueAtTime(120, t + 0.35);
-    osc.frequency.exponentialRampToValueAtTime(isAggressive ? 980 : 720, t + 0.65);
-    osc.frequency.exponentialRampToValueAtTime(55, t + 0.95);
-
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1100, t);
-    filter.Q.setValueAtTime(3.2, t);
-
+    osc.frequency.setValueAtTime(isAggressive ? 850 : 580, t);
+    osc.frequency.exponentialRampToValueAtTime(140, t + 0.3);
+    osc.frequency.exponentialRampToValueAtTime(isAggressive ? 1100 : 750, t + 0.6);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.9);
+    filter.type = 'bandpass'; filter.frequency.setValueAtTime(1250, t);
     gain.gain.setValueAtTime(0.01, t);
-    gain.gain.linearRampToValueAtTime(isAggressive ? 0.22 : 0.14, t + 0.12);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.95);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(audioCtx.destination);
-
-    osc.start(t);
-    osc.stop(t + 0.95);
+    gain.gain.linearRampToValueAtTime(isAggressive ? 0.2 : 0.12, t + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+    osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + 0.9);
   } catch (_) {}
-}
-
-export interface AlienSimData {
-  id: number;
-  pos: THREE.Vector3;
-  vel: THREE.Vector3;
-  rotY: number;
-  pitch: number;
-  roll: number;
-  bobY: number;
-  health: number;
-  state: 'STALKING' | 'SPRINTING' | 'ATTACKING' | 'FLEEING';
-  attackTimer: number;
-  strideTimer: number;
-  stridePhase: number;
 }
 
 export interface MarsAlienSwarmProps {
@@ -93,25 +54,97 @@ export interface MarsAlienSwarmProps {
   onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean }) => void;
 }
 
-interface AlienJointRefs {
-  root: THREE.Group | null;
-  body: THREE.Group | null;
-  head: THREE.Group | null;
-  jaw: THREE.Group | null;
-  innerMouth: THREE.Group | null;
-  leftThigh: THREE.Group | null;
-  leftKnee: THREE.Group | null;
-  rightThigh: THREE.Group | null;
-  rightKnee: THREE.Group | null;
-  leftArm: THREE.Group | null;
-  leftForearm: THREE.Group | null;
-  rightArm: THREE.Group | null;
-  rightForearm: THREE.Group | null;
-  tail1: THREE.Group | null;
-  tail2: THREE.Group | null;
-  tail3: THREE.Group | null;
-  marker: THREE.Mesh | null;
+interface AlienSimData {
+  pos: THREE.Vector3;
+  vel: THREE.Vector3;
+  rotY: number;
+  pitch: number;
+  roll: number;
+  state: 'STALKING' | 'SPRINTING' | 'ATTACKING' | 'FLEEING';
+  attackTimer: number;
 }
+
+// Queen Instance with Independent Animation Controller & Smooth Crossfading
+const QueenInstance: React.FC<{
+  scene: THREE.Group;
+  clips: THREE.AnimationClip[];
+  alien: AlienSimData;
+  index: number;
+}> = ({ scene, clips, alien, index }) => {
+  const rootRef = useRef<THREE.Group>(null);
+  const curAction = useRef<'Run' | 'Attack' | 'Walk'>('Run');
+
+  // Deep clone skinned mesh hierarchy with proper skeleton bindings & zero frustum-cull flickering
+  const cloned = useMemo(() => {
+    const c = cloneSkeleton(scene) as THREE.Group;
+    c.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.frustumCulled = false; // CRITICAL: Eliminates skinned-mesh camera flickering
+      }
+    });
+    return c;
+  }, [scene]);
+
+  const { actions } = useAnimations(clips, cloned);
+
+  useEffect(() => {
+    const run = actions['Run'];
+    if (run) {
+      run.reset().play();
+      // Stagger start phase so pack members don't run in identical lockstep
+      run.time = (index * 0.22) % (run.getClip().duration || 1.0);
+      curAction.current = 'Run';
+    }
+    return () => {
+      Object.values(actions).forEach((a) => a?.stop());
+    };
+  }, [actions, index]);
+
+  useFrame(() => {
+    if (!rootRef.current) return;
+
+    // 1. Smooth crossfade animation based on current behavioral state
+    const desired: 'Run' | 'Attack' | 'Walk' =
+      alien.state === 'ATTACKING' ? 'Attack' : alien.state === 'STALKING' ? 'Walk' : 'Run';
+
+    if (desired !== curAction.current) {
+      const prev = actions[curAction.current];
+      const next = actions[desired];
+      if (next) {
+        next.reset().fadeIn(0.2).play();
+        if (prev) prev.fadeOut(0.2);
+        curAction.current = desired;
+      }
+    }
+
+    // Dynamic locomotion playback speed
+    const activeAct = actions[curAction.current];
+    if (activeAct) {
+      activeAct.timeScale = alien.state === 'ATTACKING' ? 1.35 : alien.state === 'STALKING' ? 1.0 : 1.35;
+    }
+
+    // 2. Align root to Mars surface normal, heading & dune pitch
+    const norm = new THREE.Vector3(alien.pos.x - MARS_POSITION.x, alien.pos.y - MARS_POSITION.y, alien.pos.z - MARS_POSITION.z).normalize();
+    const fwd = new THREE.Vector3(Math.sin(alien.rotY), 0, Math.cos(alien.rotY));
+    const tFwd = fwd.sub(norm.clone().multiplyScalar(fwd.dot(norm))).normalize();
+    rootRef.current.position.set(alien.pos.x, alien.pos.y, alien.pos.z);
+    rootRef.current.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(norm, tFwd).normalize(), norm, tFwd))
+      .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(alien.pitch, 0, alien.roll, 'YXZ')));
+  });
+
+  return (
+    <group ref={rootRef}>
+      {/* 3.3m Queen Scale & Ground-Contact Normalized Pivot Offset */}
+      <group position={[-4.05, 1.625, 4.45]} scale={[0.005, 0.005, 0.005]}>
+        <group rotation={[0, -Math.PI / 4, 0]}>
+          <primitive object={cloned} />
+        </group>
+      </group>
+    </group>
+  );
+};
 
 export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   astronautPos,
@@ -121,294 +154,129 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   onThreatChange,
 }) => {
   const lastThreatUpdate = useRef(0);
+  const { scene: masterScene, animations } = useGLTF(MODEL_URL);
 
-  // 5 Alien Predators with physical velocity and smooth inertia
+  // Split master multi-take animation into clean in-place subclips (Zero teleport jumps)
+  const clips = useMemo(() => {
+    if (!animations || animations.length === 0) return [];
+    const origClip = animations[0];
+    // Remove root_01_8.position track to eliminate teleport jumps & snapping
+    const filteredTracks = origClip.tracks.filter((t) => !t.name.includes('root_01_8.position'));
+    const cleanClip = new THREE.AnimationClip('CleanBase', origClip.duration, filteredTracks);
+
+    const fps = 30;
+    // 12.0s to 13.0s => frame 360 to 390: Perfect seamless Run cycle
+    const runClip = THREE.AnimationUtils.subclip(cleanClip, 'Run', 360, 390, fps);
+    // 22.0s to 23.5s => frame 660 to 705: Furious claw slash & bite Attack cycle
+    const attackClip = THREE.AnimationUtils.subclip(cleanClip, 'Attack', 660, 705, fps);
+    // 7.0s to 10.0s => frame 210 to 300: Predatory stalking Walk cycle
+    const walkClip = THREE.AnimationUtils.subclip(cleanClip, 'Walk', 210, 300, fps);
+
+    return [runClip, attackClip, walkClip];
+  }, [animations]);
+
+  // Optimize material specular & shadows once on master scene
+  useMemo(() => {
+    masterScene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+        if (mat) {
+          mat.roughness = Math.min(mat.roughness ?? 0.35, 0.38);
+          mat.metalness = Math.max(mat.metalness ?? 0.25, 0.32);
+        }
+      }
+    });
+  }, [masterScene]);
+
+  // Pack of 5 Predators with physical inertia & kinematic states
   const aliens = useRef<AlienSimData[]>([
-    { id: 0, pos: new THREE.Vector3(MARS_LANDING_SITE.x + 20, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 18), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, bobY: 0, health: 100, state: 'SPRINTING', attackTimer: 0, strideTimer: 0, stridePhase: 0 },
-    { id: 1, pos: new THREE.Vector3(MARS_LANDING_SITE.x - 22, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 15), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, bobY: 0, health: 100, state: 'SPRINTING', attackTimer: 0, strideTimer: 0, stridePhase: 1.25 },
-    { id: 2, pos: new THREE.Vector3(MARS_LANDING_SITE.x + 24, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z - 18), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, bobY: 0, health: 100, state: 'SPRINTING', attackTimer: 0, strideTimer: 0, stridePhase: 2.5 },
-    { id: 3, pos: new THREE.Vector3(MARS_LANDING_SITE.x - 19, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z - 22), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, bobY: 0, health: 100, state: 'SPRINTING', attackTimer: 0, strideTimer: 0, stridePhase: 3.75 },
-    { id: 4, pos: new THREE.Vector3(MARS_LANDING_SITE.x + 8, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 26), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, bobY: 0, health: 100, state: 'SPRINTING', attackTimer: 0, strideTimer: 0, stridePhase: 5.0 },
+    { pos: new THREE.Vector3(MARS_POSITION.x + 24, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 20), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
+    { pos: new THREE.Vector3(MARS_POSITION.x - 26, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 18), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
+    { pos: new THREE.Vector3(MARS_POSITION.x + 28, MARS_TOUCHDOWN_Y, MARS_POSITION.z - 22), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
+    { pos: new THREE.Vector3(MARS_POSITION.x - 24, MARS_TOUCHDOWN_Y, MARS_POSITION.z - 24), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
+    { pos: new THREE.Vector3(MARS_POSITION.x + 12, MARS_TOUCHDOWN_Y, MARS_POSITION.z + 32), vel: new THREE.Vector3(), rotY: 0, pitch: 0, roll: 0, state: 'SPRINTING', attackTimer: 0 },
   ]);
-
-  // Pre-allocated Joint References for direct zero-overhead 60 FPS matrix updates
-  const jointRefs = useRef<AlienJointRefs[]>(
-    Array.from({ length: 5 }, () => ({
-      root: null,
-      body: null,
-      head: null,
-      jaw: null,
-      innerMouth: null,
-      leftThigh: null,
-      leftKnee: null,
-      rightThigh: null,
-      rightKnee: null,
-      leftArm: null,
-      leftForearm: null,
-      rightArm: null,
-      rightForearm: null,
-      tail1: null,
-      tail2: null,
-      tail3: null,
-      marker: null,
-    }))
-  );
-
-  // High-performance Shared Materials (Glistening Bio-mechanical Chitin)
-  const materials = useMemo(() => ({
-    chitinDark: new THREE.MeshStandardMaterial({
-      color: '#0f172a',
-      roughness: 0.24,
-      metalness: 0.35,
-    }),
-    chitinRibs: new THREE.MeshStandardMaterial({
-      color: '#1e293b',
-      roughness: 0.32,
-      metalness: 0.28,
-    }),
-    fangs: new THREE.MeshStandardMaterial({
-      color: '#f8fafc',
-      roughness: 0.16,
-      metalness: 0.05,
-    }),
-    glowingEyes: new THREE.MeshBasicMaterial({
-      color: '#ff1a1a',
-    }),
-    hudMarker: new THREE.MeshBasicMaterial({
-      color: '#ef4444',
-      wireframe: true,
-    }),
-  }), []);
-
-  // Shared Procedural Geometries (Reused across all instances for 0 memory overhead)
-  const geoms = useMemo(() => ({
-    thorax: new THREE.CapsuleGeometry(0.32, 0.75, 6, 12),
-    ribPlate: new THREE.BoxGeometry(0.52, 0.06, 0.26),
-    dorsalSpine: new THREE.CylinderGeometry(0.035, 0.07, 0.65, 6),
-    skullDome: new THREE.CapsuleGeometry(0.22, 0.92, 8, 14),
-    snout: new THREE.BoxGeometry(0.24, 0.18, 0.38),
-    fang: new THREE.ConeGeometry(0.025, 0.1, 5),
-    mandible: new THREE.BoxGeometry(0.22, 0.11, 0.34),
-    eye: new THREE.SphereGeometry(0.042, 8, 8),
-    limbUpper: new THREE.CapsuleGeometry(0.08, 0.45, 5, 8),
-    limbLower: new THREE.CapsuleGeometry(0.065, 0.42, 5, 8),
-    claw: new THREE.ConeGeometry(0.02, 0.14, 5),
-    thigh: new THREE.CapsuleGeometry(0.12, 0.52, 5, 8),
-    shank: new THREE.CapsuleGeometry(0.085, 0.58, 5, 8),
-    foot: new THREE.BoxGeometry(0.17, 0.06, 0.28),
-    toeClaw: new THREE.ConeGeometry(0.024, 0.12, 5),
-    tailSeg1: new THREE.CylinderGeometry(0.09, 0.14, 0.48, 6),
-    tailSeg2: new THREE.CylinderGeometry(0.06, 0.09, 0.5, 6),
-    tailTip: new THREE.ConeGeometry(0.05, 0.45, 5),
-    tacticalMarker: new THREE.OctahedronGeometry(0.22, 0),
-  }), []);
 
   // Master Unified 60 FPS Simulation Loop
   useFrame(({ clock }, delta) => {
     if (!active || playerMode === 'ROCKET') return;
 
-    // Clamp delta to prevent physics explosion on lag spikes
     const dt = Math.min(0.05, delta);
+    const decay = 1.0 - Math.exp(-5.5 * dt); // Exponential frame-rate independent physics
     const time = clock.getElapsedTime();
     const targetPos = playerMode === 'ROVER' ? roverPos : astronautPos;
-    const alienList = aliens.current;
-    let minDistance = 9999;
-    let anyAttacking = false;
+    let minDistance = 9999, anyAttacking = false, anyFleeing = false;
 
-    // 1. Soft Flocking Separation Force (Smooth Quadratic Damping - NO JITTER)
-    for (let i = 0; i < alienList.length; i++) {
-      for (let j = i + 1; j < alienList.length; j++) {
-        const a1 = alienList[i];
-        const a2 = alienList[j];
-        const diffX = a1.pos.x - a2.pos.x;
-        const diffZ = a1.pos.z - a2.pos.z;
-        const distSq = diffX * diffX + diffZ * diffZ;
-        const minDist = 3.6;
-
-        if (distSq < minDist * minDist && distSq > 0.001) {
-          const d = Math.sqrt(distSq);
-          const overlap = (minDist - d) / minDist; // 0 to 1
-          const pushForce = overlap * overlap * 16.0 * dt;
-          const nx = diffX / d;
-          const nz = diffZ / d;
-
-          a1.vel.x += nx * pushForce;
-          a1.vel.z += nz * pushForce;
-          a2.vel.x -= nx * pushForce;
-          a2.vel.z -= nz * pushForce;
+    // 1. Quadratic Soft-Flocking Separation (Zero clipping or jitter)
+    for (let i = 0; i < aliens.current.length; i++) {
+      for (let j = i + 1; j < aliens.current.length; j++) {
+        const a1 = aliens.current[i], a2 = aliens.current[j];
+        const dx = a1.pos.x - a2.pos.x, dz = a1.pos.z - a2.pos.z, dSq = dx * dx + dz * dz;
+        if (dSq < 23.04 && dSq > 0.001) { // 4.8m radius
+          const d = Math.sqrt(dSq), push = ((4.8 - d) / 4.8) ** 2 * 18.0 * dt;
+          a1.vel.x += (dx / d) * push; a1.vel.z += (dz / d) * push;
+          a2.vel.x -= (dx / d) * push; a2.vel.z -= (dz / d) * push;
         }
       }
     }
 
-    // 2. Individual Alien AI, Kinematics & Joint Updates
-    for (let i = 0; i < alienList.length; i++) {
-      const a = alienList[i];
-      const joints = jointRefs.current[i];
-      if (!joints.root) continue;
-
-      // Vector to target
-      const toTargetX = targetPos.x - a.pos.x;
-      const toTargetZ = targetPos.z - a.pos.z;
-      const dist = Math.hypot(toTargetX, toTargetZ);
+    // 2. AI Hunting Waves, Kinematics & Realistic Surface Conform
+    for (let i = 0; i < aliens.current.length; i++) {
+      const a = aliens.current[i];
+      const toX = targetPos.x - a.pos.x, toZ = targetPos.z - a.pos.z, dist = Math.hypot(toX, toZ);
       if (dist < minDistance) minDistance = dist;
 
-      // Predatory Wave Strike Cycle: 0 to 11s = Chase & Attack, 11s to 18s = Flee into dunes & regroup
-      const cycleTime = (time + i * 1.6) % 18.0;
-      const isFleeing = cycleTime > 11.0;
+      // Hit & Run Predatory Wave Cycle: 0-11s attack, 11-18s dune retreat & regroup
+      const isRetreat = ((time + i * 1.6) % 18.0) > 11.0;
+      let dirX = toX / (dist || 1), dirZ = toZ / (dist || 1), speed = 11.5;
 
-      let dirX = toTargetX / (dist || 1);
-      let dirZ = toTargetZ / (dist || 1);
-      let desiredSpeed = 11.2;
-
-      if (isFleeing) {
-        a.state = 'FLEEING';
-        // Run in opposite direction away from player into dunes
-        dirX = -dirX;
-        dirZ = -dirZ;
-        desiredSpeed = dist > 48.0 ? 3.5 : 12.0;
+      if (isRetreat) {
+        a.state = 'FLEEING'; anyFleeing = true;
+        dirX = -dirX; dirZ = -dirZ;
+        speed = dist > 55.0 ? 3.5 : 12.5;
+      } else if (a.state === 'ATTACKING' ? dist <= 6.2 : dist <= 4.8) {
+        a.state = 'ATTACKING'; speed = 3.6; anyAttacking = true;
+        a.attackTimer += dt * 8.0;
+        const side = i % 2 === 0 ? 1 : -1;
+        dirX = -dirZ * side * 0.7 + dirX * 0.4;
+        dirZ = dirX * side * 0.7 + dirZ * 0.4;
       } else {
-        // Hysteresis for attack state: enter at <= 4.2m, stay attacking until > 5.8m (Zero boundary flicker!)
-        const wasAttacking = a.state === 'ATTACKING';
-        const isAttackRange = wasAttacking ? dist <= 5.8 : dist <= 4.2;
-
-        if (isAttackRange) {
-          // Attack range: fast circling and striking
-          a.state = 'ATTACKING';
-          desiredSpeed = 3.2;
-          anyAttacking = true;
-          a.attackTimer += dt * 8.0;
-
-          // Strafe & circle target while striking
-          const strafeSide = i % 2 === 0 ? 1 : -1;
-          dirX = -dirZ * strafeSide * 0.7 + dirX * 0.4;
-          dirZ = dirX * strafeSide * 0.7 + dirZ * 0.4;
-        } else if (dist < 20.0) {
-          // Full aggressive sprint towards target
-          a.state = 'SPRINTING';
-          desiredSpeed = 11.5;
-        } else {
-          // Stalking
-          a.state = 'STALKING';
-          desiredSpeed = 7.5;
-        }
+        a.state = dist < 25.0 ? 'SPRINTING' : 'STALKING';
+        speed = dist < 25.0 ? 12.0 : 7.8;
       }
 
-      const desiredVelX = dirX * desiredSpeed;
-      const desiredVelZ = dirZ * desiredSpeed;
-
-      // Smooth inertia lerp (Butter-smooth acceleration, zero snap)
-      a.vel.x = THREE.MathUtils.lerp(a.vel.x, desiredVelX, dt * 5.0);
-      a.vel.z = THREE.MathUtils.lerp(a.vel.z, desiredVelZ, dt * 5.0);
-
-      // Integrate position
+      // Smooth exponential velocity lerp
+      a.vel.x += (dirX * speed - a.vel.x) * decay;
+      a.vel.z += (dirZ * speed - a.vel.z) * decay;
       a.pos.x += a.vel.x * dt;
       a.pos.z += a.vel.z * dt;
 
-      // Smooth continuous heading orientation
+      // Heading rotation with realistic banking roll into turns
       const currentSpeed = Math.hypot(a.vel.x, a.vel.z);
       if (currentSpeed > 0.5) {
-        const targetRotY = Math.atan2(a.vel.x, a.vel.z);
-        // Angle diff wrap-around
-        let diffAngle = targetRotY - a.rotY;
-        while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
-        while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
-        a.rotY += diffAngle * Math.min(1.0, dt * 6.5);
-
-        // Banking into turns (realistic predator weight transfer)
-        a.roll = THREE.MathUtils.clamp(-diffAngle * 0.35, -0.22, 0.22);
+        let diff = Math.atan2(a.vel.x, a.vel.z) - a.rotY;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        a.rotY += diff * Math.min(1.0, dt * 6.5);
+        a.roll = THREE.MathUtils.clamp(-diff * 0.4, -0.25, 0.25);
       }
 
-      // Surface normal alignment and ground conforming
-      const elev = getMarsSurfaceElevation(a.pos.x, a.pos.z);
+      // Terrain elevation conforming & slope pitch
+      const elev = getMarsElevation(a.pos.x, a.pos.z);
       a.pos.y = elev;
-
-      // Stride timer advances proportionally to ground speed (Zero foot sliding!)
-      a.strideTimer += dt * currentSpeed * 2.2;
-      const strideCycle = a.strideTimer + a.stridePhase;
-
-      // Running stride & vertical body bobbing
-      const strideSin = Math.sin(strideCycle);
-      const strideCos = Math.cos(strideCycle);
-      a.pitch = a.state === 'ATTACKING' ? 0.38 + Math.sin(a.attackTimer * 4) * 0.15 : 0.26 + (currentSpeed / 12) * 0.12;
-      a.bobY = Math.abs(strideSin) * 0.18;
-
-      // Apply Matrix Transforms to Root Group
-      const surfaceQuat = getMarsSurfaceQuat(a.pos.x, a.pos.z, a.rotY);
-      const poseQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(a.pitch, 0, a.roll, 'YXZ'));
-      surfaceQuat.multiply(poseQuat);
-
-      joints.root.position.set(a.pos.x, a.pos.y + a.bobY, a.pos.z);
-      joints.root.quaternion.copy(surfaceQuat);
-
-      // ================= SKELETAL JOINT KINEMATICS =================
-      // Hind Leg Gait: Hip extension + Knee flexion for high clearance
-      const legL = strideSin;
-      const legR = -strideSin;
-      const kneeL = 0.55 + Math.max(0, -legL) * 0.75;
-      const kneeR = 0.55 + Math.max(0, -legR) * 0.75;
-
-      if (joints.leftThigh) joints.leftThigh.rotation.x = legL * 0.72;
-      if (joints.leftKnee) joints.leftKnee.rotation.x = kneeL;
-      if (joints.rightThigh) joints.rightThigh.rotation.x = legR * 0.72;
-      if (joints.rightKnee) joints.rightKnee.rotation.x = kneeR;
-
-      // Forelimb Motion (Reaching & Slashing)
-      if (a.state === 'ATTACKING') {
-        const slashL = Math.sin(a.attackTimer * 7.0);
-        const slashR = Math.cos(a.attackTimer * 7.0);
-        if (joints.leftArm) joints.leftArm.rotation.x = -0.3 + slashL * 0.75;
-        if (joints.leftForearm) joints.leftForearm.rotation.x = 0.5 + slashL * 0.35;
-        if (joints.rightArm) joints.rightArm.rotation.x = -0.3 + slashR * 0.75;
-        if (joints.rightForearm) joints.rightForearm.rotation.x = 0.5 + slashR * 0.35;
-
-        // Snapping jaws & striking inner mouth
-        const bite = Math.abs(Math.sin(a.attackTimer * 9.0));
-        if (joints.jaw) joints.jaw.rotation.x = 0.15 + bite * 0.45;
-        if (joints.head) joints.head.rotation.x = -0.1 + Math.sin(a.attackTimer * 6.0) * 0.2;
-      } else {
-        // Natural predatory sprint arms
-        if (joints.leftArm) joints.leftArm.rotation.x = -legL * 0.55;
-        if (joints.leftForearm) joints.leftForearm.rotation.x = 0.6 + Math.max(0, -legL) * 0.4;
-        if (joints.rightArm) joints.rightArm.rotation.x = -legR * 0.55;
-        if (joints.rightForearm) joints.rightForearm.rotation.x = 0.6 + Math.max(0, -legR) * 0.4;
-
-        if (joints.jaw) joints.jaw.rotation.x = 0.08;
-        if (joints.head) joints.head.rotation.x = -0.18 + strideCos * 0.05;
-      }
-
-      // Serpentine Traveling Tail Wave (Phase-delayed sinusoidal whip)
-      const tailWave1 = Math.sin(strideCycle * 0.5);
-      const tailWave2 = Math.sin(strideCycle * 0.5 - 0.45);
-      const tailWave3 = Math.sin(strideCycle * 0.5 - 0.9);
-
-      if (joints.tail1) joints.tail1.rotation.y = tailWave1 * 0.3;
-      if (joints.tail2) joints.tail2.rotation.y = tailWave2 * 0.45;
-      if (joints.tail3) joints.tail3.rotation.y = tailWave3 * 0.6;
-
-      // Smooth floating tactical diamond marker (Zero DOM, zero z-fighting, zero pulse jitter)
-      if (joints.marker) {
-        joints.marker.rotation.y = time * 1.5 + i;
-        const markerScale = a.state === 'ATTACKING' ? 1.25 : 0.95;
-        joints.marker.scale.set(markerScale, markerScale, markerScale);
-      }
+      const slope = (getMarsElevation(a.pos.x + dirX * 1.5, a.pos.z + dirZ * 1.5) - elev) / 1.5;
+      a.pitch = -slope * 0.45 + (a.state === 'ATTACKING' ? 0.2 + Math.sin(a.attackTimer * 4) * 0.08 : 0.1);
     }
 
-    // Audio Screech trigger when closing distance
-    if (minDistance < 24) {
-      playAlienScreech(anyAttacking);
-    }
+    if (minDistance < 28) playScreech(anyAttacking);
 
-    // Report threat status to HUD (throttled to 5Hz to prevent React state churn)
-    const nowTime = performance.now();
-    if (onThreatChange && nowTime - lastThreatUpdate.current > 200) {
-      lastThreatUpdate.current = nowTime;
-      const anyFleeing = alienList.some((al) => al.state === 'FLEEING');
-      onThreatChange({
-        count: alienList.length,
-        nearestDist: Math.round(minDistance),
-        isAttacking: anyAttacking,
-        isFleeing: anyFleeing,
-      });
+    // Stable HUD threat reporting (throttled to 5 Hz)
+    const now = performance.now();
+    if (onThreatChange && now - lastThreatUpdate.current > 200) {
+      lastThreatUpdate.current = now;
+      onThreatChange({ count: aliens.current.length, nearestDist: Math.round(minDistance), isAttacking: anyAttacking, isFleeing: anyFleeing });
     }
   });
 
@@ -416,198 +284,15 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
 
   return (
     <group>
-      {aliens.current.map((alien, idx) => {
-        const j = jointRefs.current[idx];
-
-        return (
-          <group
-            key={alien.id}
-            ref={(el) => { j.root = el; }}
-            position={alien.pos.toArray()}
-          >
-            <group scale={[1.22, 1.22, 1.22]}>
-              {/* ================= 1. Armored Thorax & Ribs ================= */}
-              <group ref={(el) => { j.body = el; }} position={[0, 1.45, 0]}>
-                {/* Main Chitin Thorax */}
-                <mesh geometry={geoms.thorax} material={materials.chitinDark} />
-
-                {/* Exoskeleton Rib Plates */}
-                {[-0.24, -0.08, 0.08, 0.24].map((yo, ri) => (
-                  <mesh
-                    key={ri}
-                    position={[0, yo, 0.16]}
-                    rotation={[0.2, 0, 0]}
-                    geometry={geoms.ribPlate}
-                    material={materials.chitinRibs}
-                  />
-                ))}
-
-                {/* 4 Dorsal Biomechanical Spines */}
-                {[
-                  [-0.14, 0.22, -0.22, -0.38],
-                  [0.14, 0.22, -0.22, -0.38],
-                  [-0.18, 0.02, -0.25, -0.48],
-                  [0.18, 0.02, -0.25, -0.48],
-                ].map(([tx, ty, tz, rotX], si) => (
-                  <mesh
-                    key={si}
-                    position={[tx, ty, tz]}
-                    rotation={[rotX, 0, tx > 0 ? 0.15 : -0.15]}
-                    geometry={geoms.dorsalSpine}
-                    material={materials.chitinDark}
-                  />
-                ))}
-
-                {/* ================= 2. Aerodynamic Xenomorph Head ================= */}
-                <group ref={(el) => { j.head = el; }} position={[0, 0.48, 0.32]}>
-                  {/* Elongated Skull Dome */}
-                  <mesh
-                    position={[0, 0.08, -0.32]}
-                    rotation={[Math.PI / 2 + 0.15, 0, 0]}
-                    geometry={geoms.skullDome}
-                    material={materials.chitinDark}
-                  />
-
-                  {/* Upper Snout */}
-                  <mesh position={[0, -0.02, 0.24]} geometry={geoms.snout} material={materials.chitinRibs} />
-
-                  {/* Razor Upper Fangs */}
-                  {[-0.08, 0, 0.08].map((fx, fi) => (
-                    <mesh
-                      key={fi}
-                      position={[fx, -0.14, 0.34]}
-                      rotation={[Math.PI, 0, 0]}
-                      geometry={geoms.fang}
-                      material={materials.fangs}
-                    />
-                  ))}
-
-                  {/* Articulated Lower Mandible */}
-                  <group ref={(el) => { j.jaw = el; }} position={[0, -0.1, 0.1]}>
-                    <mesh position={[0, -0.04, 0.18]} geometry={geoms.mandible} material={materials.chitinDark} />
-                    {/* Lower Fangs */}
-                    {[-0.07, 0.07].map((tx, ti) => (
-                      <mesh
-                        key={ti}
-                        position={[tx, 0.05, 0.28]}
-                        geometry={geoms.fang}
-                        material={materials.fangs}
-                      />
-                    ))}
-                  </group>
-
-                  {/* Piercing Crimson Ocular Slit (Pure unlit emissive - Zero Lighting Flicker) */}
-                  {[-0.11, 0.11].map((ex, ei) => (
-                    <mesh
-                      key={ei}
-                      position={[ex, 0.04, 0.28]}
-                      geometry={geoms.eye}
-                      material={materials.glowingEyes}
-                    />
-                  ))}
-                </group>
-
-                {/* ================= 3. Slashing Forelimbs ================= */}
-                {/* Left Arm */}
-                <group ref={(el) => { j.leftArm = el; }} position={[-0.32, 0.28, 0.12]}>
-                  <mesh position={[0, -0.24, 0]} geometry={geoms.limbUpper} material={materials.chitinDark} />
-                  <group ref={(el) => { j.leftForearm = el; }} position={[0, -0.46, 0]} rotation={[0.65, 0, 0.15]}>
-                    <mesh position={[0, -0.22, 0]} geometry={geoms.limbLower} material={materials.chitinRibs} />
-                    {/* 3 Hand Claws */}
-                    {[-0.04, 0, 0.04].map((cx, ci) => (
-                      <mesh
-                        key={ci}
-                        position={[cx, -0.45, 0.04]}
-                        rotation={[0.4, 0, 0]}
-                        geometry={geoms.claw}
-                        material={materials.fangs}
-                      />
-                    ))}
-                  </group>
-                </group>
-
-                {/* Right Arm */}
-                <group ref={(el) => { j.rightArm = el; }} position={[0.32, 0.28, 0.12]}>
-                  <mesh position={[0, -0.24, 0]} geometry={geoms.limbUpper} material={materials.chitinDark} />
-                  <group ref={(el) => { j.rightForearm = el; }} position={[0, -0.46, 0]} rotation={[0.65, 0, -0.15]}>
-                    <mesh position={[0, -0.22, 0]} geometry={geoms.limbLower} material={materials.chitinRibs} />
-                    {/* 3 Hand Claws */}
-                    {[-0.04, 0, 0.04].map((cx, ci) => (
-                      <mesh
-                        key={ci}
-                        position={[cx, -0.45, 0.04]}
-                        rotation={[0.4, 0, 0]}
-                        geometry={geoms.claw}
-                        material={materials.fangs}
-                      />
-                    ))}
-                  </group>
-                </group>
-
-                {/* ================= 4. Segmented Whipping Tail ================= */}
-                <group ref={(el) => { j.tail1 = el; }} position={[0, -0.38, -0.18]} rotation={[-0.45, 0, 0]}>
-                  <mesh position={[0, -0.22, -0.18]} geometry={geoms.tailSeg1} material={materials.chitinDark} />
-                  <group ref={(el) => { j.tail2 = el; }} position={[0, -0.45, -0.36]} rotation={[0.25, 0, 0]}>
-                    <mesh position={[0, -0.18, -0.2]} geometry={geoms.tailSeg2} material={materials.chitinDark} />
-                    <group ref={(el) => { j.tail3 = el; }} position={[0, -0.46, -0.44]} rotation={[1.2, 0, 0]}>
-                      <mesh geometry={geoms.tailTip} material={materials.fangs} />
-                    </group>
-                  </group>
-                </group>
-              </group>
-
-              {/* ================= 5. Digitigrade Hind Legs ================= */}
-              {/* Left Hind Leg */}
-              <group ref={(el) => { j.leftThigh = el; }} position={[-0.28, 1.25, -0.1]}>
-                <mesh position={[0, -0.32, 0.08]} rotation={[-0.35, 0, 0]} geometry={geoms.thigh} material={materials.chitinDark} />
-                <group ref={(el) => { j.leftKnee = el; }} position={[0, -0.62, 0.22]}>
-                  <mesh position={[0, -0.32, -0.06]} geometry={geoms.shank} material={materials.chitinRibs} />
-                  <group position={[0, -0.62, -0.14]} rotation={[-0.4, 0, 0]}>
-                    <mesh position={[0, 0, 0.12]} geometry={geoms.foot} material={materials.chitinDark} />
-                    {[-0.05, 0, 0.05].map((tx, ti) => (
-                      <mesh
-                        key={ti}
-                        position={[tx, -0.02, 0.28]}
-                        rotation={[0.3, 0, 0]}
-                        geometry={geoms.toeClaw}
-                        material={materials.fangs}
-                      />
-                    ))}
-                  </group>
-                </group>
-              </group>
-
-              {/* Right Hind Leg */}
-              <group ref={(el) => { j.rightThigh = el; }} position={[0.28, 1.25, -0.1]}>
-                <mesh position={[0, -0.32, 0.08]} rotation={[-0.35, 0, 0]} geometry={geoms.thigh} material={materials.chitinDark} />
-                <group ref={(el) => { j.rightKnee = el; }} position={[0, -0.62, 0.22]}>
-                  <mesh position={[0, -0.32, -0.06]} geometry={geoms.shank} material={materials.chitinRibs} />
-                  <group position={[0, -0.62, -0.14]} rotation={[-0.4, 0, 0]}>
-                    <mesh position={[0, 0, 0.12]} geometry={geoms.foot} material={materials.chitinDark} />
-                    {[-0.05, 0, 0.05].map((tx, ti) => (
-                      <mesh
-                        key={ti}
-                        position={[tx, -0.02, 0.28]}
-                        rotation={[0.3, 0, 0]}
-                        geometry={geoms.toeClaw}
-                        material={materials.fangs}
-                      />
-                    ))}
-                  </group>
-                </group>
-              </group>
-            </group>
-
-            {/* Tactical 3D Holographic Diamond Glyph (Zero DOM, Zero Flickering) */}
-            <mesh
-              ref={(el) => { j.marker = el; }}
-              position={[0, 2.7, 0]}
-              geometry={geoms.tacticalMarker}
-              material={materials.hudMarker}
-            />
-          </group>
-        );
-      })}
+      {aliens.current.map((alien, idx) => (
+        <QueenInstance
+          key={idx}
+          scene={masterScene}
+          clips={clips}
+          alien={alien}
+          index={idx}
+        />
+      ))}
     </group>
   );
 };

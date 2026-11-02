@@ -1,7 +1,9 @@
 import React, { Suspense, useRef, useState, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Html, useProgress } from '@react-three/drei';
+import { OrbitControls, Html, useProgress, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+
+useGLTF.preload('/models/gastaroid_queen.glb');
 import { RealisticLandscape } from './RealisticLandscape';
 import { SpaceEnvironment, MOON_POSITION, MOON_RADIUS, MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 import { MoonExploration, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './MoonExploration';
