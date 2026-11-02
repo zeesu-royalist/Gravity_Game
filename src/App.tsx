@@ -390,56 +390,6 @@ export default function App() {
         <div className="pointer-events-none fixed inset-0 z-20 shadow-[inset_0_0_120px_rgba(239,68,68,0.5)] border-4 border-red-500/40 transition-opacity duration-300" />
       )}
 
-      {/* Xenomorph Alien Swarm Threat & Combat HUD */}
-      {isAtMars && hudState.alienThreat && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER') && (
-        <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-25 px-5 py-2.5 rounded-2xl border-2 backdrop-blur-md shadow-2xl flex items-center gap-3.5 transition-all duration-300 ${
-          hudState.alienThreat.allDead
-            ? 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-[0_0_35px_rgba(16,185,129,0.7)]'
-            : hudState.alienThreat.isAttacking
-            ? 'bg-red-950/95 border-red-500 text-red-200 shadow-[0_0_35px_rgba(239,68,68,0.7)]'
-            : hudState.alienThreat.isFleeing
-            ? 'bg-cyan-950/90 border-cyan-500/80 text-cyan-200 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
-            : 'bg-black/90 border-amber-500/80 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
-        }`}>
-          <span className="text-2xl">{hudState.alienThreat.allDead ? '🏆' : hudState.alienThreat.isAttacking ? '🚨' : hudState.alienThreat.isFleeing ? '💨' : '⚠️'}</span>
-          <div>
-            <div className="font-black text-xs tracking-wider uppercase flex items-center gap-2">
-              <span className={hudState.alienThreat.allDead ? 'text-emerald-400 font-extrabold' : hudState.alienThreat.isAttacking ? 'text-red-400 font-extrabold' : hudState.alienThreat.isFleeing ? 'text-cyan-300 font-extrabold' : 'text-amber-400'}>
-                {hudState.alienThreat.allDead
-                  ? 'MARS SECURED! ALL PREDATORS ELIMINATED!'
-                  : hudState.alienThreat.isAttacking
-                  ? 'UNDER ALIENS ATTACK!'
-                  : hudState.alienThreat.isFleeing
-                  ? 'ALIENS RETREATING INTO DUNES'
-                  : 'ALIENS CHARGING IN!'}
-              </span>
-              <span className={`px-1.5 py-0.5 font-mono text-[10px] rounded border ${
-                hudState.alienThreat.allDead
-                  ? 'bg-emerald-900/80 text-emerald-300 border-emerald-500/50'
-                  : hudState.alienThreat.isFleeing
-                  ? 'bg-cyan-900/80 text-cyan-300 border-cyan-500/50'
-                  : 'bg-red-900/80 text-red-300 border-red-500/50'
-              }`}>
-                {hudState.alienThreat.allDead ? '5 / 5 CLEARED' : `${hudState.alienThreat.count} HOSTILES`}
-              </span>
-            </div>
-            <div className="text-[11px] font-mono text-gray-300 flex items-center gap-2 mt-0.5">
-              <span>KILLS: <strong className="text-emerald-400 font-bold">{hudState.alienThreat.kills ?? 0} / 5</strong></span>
-              <span>•</span>
-              {hudState.alienThreat.allDead ? (
-                <span className="text-emerald-300 font-semibold">ALL GASTAROID QUEENS NEUTRALIZED — BASE SECURE!</span>
-              ) : (
-                <>
-                  <span>DIST: <strong className={hudState.alienThreat.nearestDist < 8 ? 'text-red-400 font-bold' : 'text-amber-300 font-bold'}>{hudState.alienThreat.nearestDist}m</strong></span>
-                  <span>•</span>
-                  <span>{playerMode === 'ASTRONAUT' ? 'HOLD [Q] TO FIRE PLASMA RIFLE!' : 'DRIVE FULL THROTTLE TO EVADE [W]!'}</span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="absolute top-4 left-4 z-10 bg-black/75 backdrop-blur-md px-4 py-3 rounded-xl border border-cyan-500/30 text-white flex items-center gap-4 shadow-2xl">
         <div>

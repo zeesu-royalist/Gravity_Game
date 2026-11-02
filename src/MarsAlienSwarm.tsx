@@ -180,6 +180,9 @@ const QueenInstance: React.FC<{
       const prev = actions[curAction.current];
       const next = actions[desired];
       if (next) {
+        if (curAction.current === 'Die' && actions['Die']) {
+          actions['Die'].stop();
+        }
         if (desired === 'Die') {
           next.setLoop(THREE.LoopOnce, 1);
           next.clampWhenFinished = true;
@@ -292,6 +295,33 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   const bulletsMeshRef = useRef<THREE.InstancedMesh>(null);
   const sparksMeshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
+  const prevPlayerMode = useRef(playerMode);
+
+  // 1. Rocket me baith ke utarne ke baad aliens phir se jinda ho jaye
+  if (prevPlayerMode.current === 'ROCKET' && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')) {
+    const spawns = [
+      { x: 24, z: 20 },
+      { x: -26, z: 18 },
+      { x: 28, z: -22 },
+      { x: -24, z: -24 },
+      { x: 12, z: 32 },
+    ];
+    aliens.current.forEach((al, idx) => {
+      al.health = 100;
+      al.state = 'SPRINTING';
+      al.attackTimer = 0;
+      al.deathTimer = 0;
+      al.flinchTimer = 0;
+      al.vel.set(0, 0, 0);
+      const off = spawns[idx % spawns.length];
+      const sx = MARS_POSITION.x + off.x;
+      const sz = MARS_POSITION.z + off.z;
+      al.pos.set(sx, getMarsElevation(sx, sz), sz);
+    });
+    bulletsRef.current.forEach((b) => { b.active = false; });
+    sparksRef.current.forEach((s) => { s.active = false; });
+  }
+  prevPlayerMode.current = playerMode;
 
   // Master Unified 60 FPS Combat, Kinematics & AI Loop
   useFrame(({ clock }, delta) => {
