@@ -885,26 +885,24 @@ export default function App() {
 
           {/* Vertical Minimal Health Indicator (Visible ONLY when Astronaut steps out on Mars) */}
           {isAtMars && playerMode === 'ASTRONAUT' && (
-            <div className="flex flex-col items-center mb-1.5 sm:mb-2 select-none pointer-events-none animate-in fade-in duration-300">
-              <div className={`text-[8px] sm:text-[9px] font-mono font-bold mb-0.5 leading-none ${astronautHealth > 50 ? 'text-cyan-300' : astronautHealth > 25 ? 'text-amber-400' : 'text-red-400 animate-pulse'}`}>
+            <div className="flex flex-col items-center translate-x-1.5 mb-1.5 sm:mb-2 select-none pointer-events-none animate-in fade-in duration-200">
+              {/* Percentage */}
+              <div className={`text-[8.5px] sm:text-[9.5px] font-mono font-bold mb-0.5 leading-none ${astronautHealth >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {astronautHealth}%
               </div>
-              <div className="flex items-center justify-center gap-1 h-14 sm:h-16">
-                {/* Vertical Capsule Pill Bar - Sleek & matching button palette */}
-                <div className="w-2 sm:w-2.5 h-full rounded-full border-[1.5px] border-slate-700/80 bg-black/50 backdrop-blur-md p-[1.5px] flex flex-col justify-end overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+
+              {/* Minimal Capsule + HEALTH Letters */}
+              <div className="flex items-center justify-center gap-1.5 h-14 sm:h-16">
+                {/* Flat Solid Capsule (No gradients, matching button dark glass) */}
+                <div className={`w-2.5 sm:w-3 h-full rounded-full border-2 bg-black/40 p-[2px] flex flex-col justify-end overflow-hidden ${astronautHealth >= 50 ? 'border-slate-700/80' : 'border-red-500/80'}`}>
                   <div
-                    className={`w-full rounded-full transition-all duration-300 ${astronautHealth > 50
-                      ? 'bg-gradient-to-t from-cyan-500 to-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.5)]'
-                      : astronautHealth > 25
-                        ? 'bg-gradient-to-t from-amber-500 to-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.5)]'
-                        : 'bg-gradient-to-t from-red-600 to-rose-400 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse'
-                      }`}
+                    className={`w-full rounded-full transition-all duration-300 ${astronautHealth >= 50 ? 'bg-emerald-400' : 'bg-red-500'}`}
                     style={{ height: `${astronautHealth}%` }}
                   />
                 </div>
 
-                {/* Vertical HEALTH Letters - Subtle & Minimal */}
-                <div className="flex flex-col justify-between items-center h-full text-[6.5px] sm:text-[7.5px] font-mono font-bold text-slate-400 tracking-tighter leading-none select-none">
+                {/* Flat HEALTH Letters with balanced line height */}
+                <div className="flex flex-col items-center justify-center text-[6px] sm:text-[7px] font-mono font-bold text-slate-300 uppercase leading-[7.5px] sm:leading-[8.5px] select-none">
                   <span>H</span>
                   <span>E</span>
                   <span>A</span>
