@@ -684,7 +684,7 @@ export default function App() {
       {isDead && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md select-none animate-in fade-in duration-300 px-4">
           <div className="text-red-500 text-3xl sm:text-5xl font-black tracking-widest uppercase mb-2 animate-pulse text-center">
-            SUIT BREACHED
+            YOU DIED
           </div>
           <div className="text-slate-300 text-xs sm:text-sm font-mono text-center max-w-sm mb-4">
             Astronaut vital signs lost on Mars. Critical life support system failure.
