@@ -18,6 +18,12 @@ const EARTH_LANDING_SITE = new THREE.Vector3(0, 0.2, 0);
 const MOON_APPROACH = new THREE.Vector3(MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y + 180, MOON_LANDING_SITE.z);
 const MARS_APPROACH = new THREE.Vector3(MARS_LANDING_SITE.x, MARS_TOUCHDOWN_Y + 240, MARS_LANDING_SITE.z);
 
+const PLANET_DESTS = [
+  { id: 'EARTH' as const, icon: '🌍', name: 'EARTH', base: 'Buran Pad', g: '1.0G', v: 'Stormchaser' },
+  { id: 'MOON' as const, icon: '🌕', name: 'MOON', base: 'Luna Alpha', g: '0.17G', v: 'Lunar 4x4' },
+  { id: 'MARS' as const, icon: '🔴', name: 'MARS', base: 'Ares Base', g: '0.38G', v: 'Martian 4x4' },
+];
+
 function UniversalThirdPersonCamera({
   playerMode, rocketPos, astronautPos, roverPos, resetCount,
 }: {
@@ -70,35 +76,23 @@ function UniversalThirdPersonCamera({
 }
 
 function getMissionStage(
-  dest: 'MOON' | 'MARS' | 'EARTH',
-  alt: number,
-  dist: number,
-  targetDist: number,
-  isFlying: boolean,
-  isLanded: boolean,
-  world: 'EARTH' | 'MOON' | 'MARS'
+  dest: 'MOON' | 'MARS' | 'EARTH', alt: number, dist: number, targetDist: number, isFlying: boolean, isLanded: boolean, world: 'EARTH' | 'MOON' | 'MARS'
 ): string {
+  if (isLanded) return world === 'MARS' ? '🔴 MISSION COMPLETE: TOUCHDOWN ON MARS!' : world === 'MOON' ? '🌕 MISSION COMPLETE: TOUCHDOWN ON MOON!' : '🌍 MISSION COMPLETE: SAFE RETURN TO EARTH!';
+  if (!isFlying) return `${world === 'MARS' ? 'ARES BASE' : world === 'MOON' ? 'LUNAR BASE' : 'EARTH PAD'}: READY FOR LAUNCH`;
   if (dest === 'MARS') {
-    if (!isFlying && !isLanded) return 'STANDBY ON EARTH PAD';
-    if (isLanded) return '🔴 MISSION COMPLETE: TOUCHDOWN ON MARS (ARES BASE)!';
-    if (alt < 1200) return 'STAGE 1: ATMOSPHERIC ASCENT';
-    if (alt < 5000) return 'STAGE 2: STRATOSPHERE TRANSITION';
-    if (alt < 12000) return 'STAGE 3: TRANS-MARS INJECTION (TMI)';
+    if (world === 'EARTH' && alt < 1200) return 'STAGE 1: ATMOSPHERIC ASCENT';
+    if (world === 'EARTH' && alt < 5000) return 'STAGE 2: STRATOSPHERE TRANSITION';
+    if (world === 'EARTH' && alt < 12000) return 'STAGE 3: TRANS-MARS INJECTION (TMI)';
     return dist > 4000 ? 'STAGE 4: INTERPLANETARY MARS CRUISE' : dist > 600 ? 'STAGE 5: MARTIAN APPROACH & RETRO-BURN' : 'STAGE 6: TOUCHDOWN ON ARES BASE PAD';
   }
   if (dest === 'MOON') {
-    if (!isFlying && !isLanded) return 'STANDBY ON EARTH PAD';
-    if (isLanded) return '🌕 MISSION COMPLETE: TOUCHDOWN ON MOON!';
-    if (alt < 1200) return 'STAGE 1: ATMOSPHERIC ASCENT';
-    if (alt < 4000) return 'STAGE 2: STRATOSPHERE TRANSITION';
-    if (alt < 10000) return 'STAGE 3: TRANSLUNAR INJECTION (TLI)';
+    if (world === 'EARTH' && alt < 1200) return 'STAGE 1: ATMOSPHERIC ASCENT';
+    if (world === 'EARTH' && alt < 4000) return 'STAGE 2: STRATOSPHERE TRANSITION';
+    if (world === 'EARTH' && alt < 10000) return 'STAGE 3: TRANSLUNAR INJECTION (TLI)';
     return dist > 3000 ? 'STAGE 4: CISLUNAR CRUISE' : dist > 500 ? 'STAGE 5: LUNAR APPROACH & RETRO-BURN' : 'STAGE 6: TOUCHDOWN ON MOON PAD';
   }
-  if (!isFlying && isLanded) return `${world === 'MARS' ? 'ARES BASE' : 'LUNAR BASE'}: READY FOR EARTH RETURN`;
-  if (isLanded) return '🌍 MISSION COMPLETE: SAFE RETURN TO EARTH!';
-  if (dist < 800) return 'RETURN STAGE 1: PLANETARY ASCENT';
-  if (dist < 3500) return 'RETURN STAGE 2: TRANS-EARTH INJECTION';
-  return targetDist > 3500 ? 'RETURN STAGE 3: DEEP SPACE TRANSIT' : targetDist > 500 ? 'RETURN STAGE 4: EARTH RE-ENTRY' : 'RETURN STAGE 5: RETRO-BURN DESCENT';
+  return dist < 800 ? 'RETURN STAGE 1: PLANETARY ASCENT' : dist < 3500 ? 'RETURN STAGE 2: TRANS-EARTH INJECTION' : targetDist > 3500 ? 'RETURN STAGE 3: DEEP SPACE TRANSIT' : targetDist > 500 ? 'RETURN STAGE 4: EARTH RE-ENTRY' : 'RETURN STAGE 5: RETRO-BURN DESCENT';
 }
 
 function Loader() {
@@ -263,11 +257,11 @@ export default function App() {
   const marsAstroPosRef = useRef(new THREE.Vector3(MARS_LANDING_SITE.x + 3.8, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 1.8));
   const marsRoverPosRef = useRef(new THREE.Vector3(MARS_LANDING_SITE.x + 11.0, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 5.5));
 
-  const isAtMoon = posRef.current.distanceTo(MOON_LANDING_SITE) < 40;
-  const isAtMars = posRef.current.distanceTo(MARS_LANDING_SITE) < 40;
+  const isAtMoon = posRef.current.distanceTo(MOON_LANDING_SITE) < 80;
+  const isAtMars = posRef.current.distanceTo(MARS_LANDING_SITE) < 80;
   const currentWorld: 'EARTH' | 'MOON' | 'MARS' = isAtMars ? 'MARS' : isAtMoon ? 'MOON' : 'EARTH';
 
-  const executeLaunch = (chosenDest?: 'MOON' | 'MARS') => {
+  const executeLaunch = (chosenDest?: 'MOON' | 'MARS' | 'EARTH') => {
     if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
     if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
     setIsExploding(false);
@@ -283,10 +277,8 @@ export default function App() {
   };
 
   const handleLaunch = () => {
-    if (!isFlying && currentWorld === 'EARTH') {
+    if (!isFlying && playerMode === 'ROCKET') {
       setShowDestModal(true);
-    } else {
-      executeLaunch();
     }
   };
 
@@ -376,6 +368,11 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current[e.code] = true;
+      if (e.code === 'Escape') {
+        setShowDestModal(false);
+        setShowActionsInfo(false);
+        return;
+      }
       if (e.code === 'KeyR') { handleReset(); return; }
       if (isExplodingRef.current) return;
       if (e.code === 'KeyE') handleInteraction();
@@ -450,7 +447,7 @@ export default function App() {
 
         if (autopilot) {
           if (altAbovePad <= 0.8 && hDistToPad <= 24.0) {
-            landRocket(targetPad, isMars || isMoon ? 'EARTH' : 'MOON');
+            landRocket(targetPad, isMars ? 'MARS' : isMoon ? 'MOON' : 'EARTH');
           } else if (altAbovePad < 250 && hDistToPad < 140) {
             quatRef.current.slerp(new THREE.Quaternion(), delta * 4.5);
             pos.x = THREE.MathUtils.lerp(pos.x, targetPad.x, delta * 3.5);
@@ -485,18 +482,18 @@ export default function App() {
           pos.addScaledVector(vel, delta);
 
           if (isMars) {
-            if (pos.distanceTo(MARS_LANDING_SITE) < 32 || (pos.distanceTo(MARS_POSITION) <= MARS_RADIUS + 3 && pos.y > 10000)) landRocket(MARS_LANDING_SITE, 'EARTH');
+            if (pos.distanceTo(MARS_LANDING_SITE) < 32 || (pos.distanceTo(MARS_POSITION) <= MARS_RADIUS + 3 && pos.y > 10000)) landRocket(MARS_LANDING_SITE, 'MARS');
           } else if (isMoon) {
-            if (pos.distanceTo(MOON_LANDING_SITE) < 28 || (pos.distanceTo(MOON_POSITION) <= MOON_RADIUS + 2 && pos.y > 10000)) landRocket(MOON_LANDING_SITE, 'EARTH');
+            if (pos.distanceTo(MOON_LANDING_SITE) < 28 || (pos.distanceTo(MOON_POSITION) <= MOON_RADIUS + 2 && pos.y > 10000)) landRocket(MOON_LANDING_SITE, 'MOON');
           } else {
-            if (pos.y <= 1.2 && Math.hypot(pos.x, pos.z) < 32) landRocket(EARTH_LANDING_SITE, 'MOON');
+            if (pos.y <= 1.2 && Math.hypot(pos.x, pos.z) < 32) landRocket(EARTH_LANDING_SITE, 'EARTH');
           }
         }
 
         // Hard ground clamp
-        if ((!isMoon && !isMars || pos.y < 3000) && pos.y < 0.2) { pos.y = 0.2; if (vel.y < 0) vel.y = 0; }
-        if (isMoon && pos.distanceTo(MOON_POSITION) < MOON_RADIUS + 30 && pos.y < MOON_TOUCHDOWN_Y) { pos.y = MOON_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
-        if (isMars && pos.distanceTo(MARS_POSITION) < MARS_RADIUS + 30 && pos.y < MARS_TOUCHDOWN_Y) { pos.y = MARS_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
+        if (pos.y < 0.2 && Math.hypot(pos.x, pos.z) < 3000) { pos.y = 0.2; if (vel.y < 0) vel.y = 0; }
+        if (pos.distanceTo(MOON_POSITION) < MOON_RADIUS + 30 && pos.y < MOON_TOUCHDOWN_Y) { pos.y = MOON_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
+        if (pos.distanceTo(MARS_POSITION) < MARS_RADIUS + 30 && pos.y < MARS_TOUCHDOWN_Y) { pos.y = MARS_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
 
         rcsActiveRef.current = { pitch: rcsPitch, yaw: rcsYaw };
         const destDist = isMars
@@ -661,60 +658,41 @@ export default function App() {
         </div>
       </div>
 
-      {/* Destination Selection Modal - Ultra-Compact Space HUD Terminal (Mobile-Friendly & Minimal Code) */}
+      {/* Destination Selection Modal */}
       {showDestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 select-none animate-in fade-in duration-150">
-          <div className="relative w-full max-w-[290px] sm:max-w-md bg-[#050813]/95 border border-cyan-500/30 rounded-xl p-2.5 sm:p-4 shadow-[0_0_30px_rgba(6,182,212,0.15)] text-white">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10 text-[9.5px] sm:text-xs font-mono text-cyan-400 font-bold tracking-wider">
-              <span className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-                SELECT DESTINATION
-              </span>
-              <button
-                onClick={() => setShowDestModal(false)}
-                className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-white/10 cursor-pointer text-xs"
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 select-none">
+          <div className="w-full max-w-[280px] sm:max-w-sm bg-[#050813]/95 border border-cyan-500/30 rounded-xl p-2.5 sm:p-3.5 shadow-2xl text-white">
+            <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10 text-[9.5px] sm:text-xs font-mono text-cyan-400 font-bold">
+              <span>SELECT DESTINATION • {currentWorld}</span>
+              <button onClick={() => setShowDestModal(false)} className="text-slate-400 hover:text-white cursor-pointer text-xs px-1">✕</button>
             </div>
 
-            {/* Compact Side-by-Side Space Cards Grid */}
-            <div className="grid grid-cols-2 gap-1.5 sm:gap-3">
-              {[
-                { id: 'MOON' as const, icon: '🌕', name: 'THE MOON', base: 'Luna Alpha', dist: '19.5k m', g: '0.17 G', vehicle: 'Lunar 4x4', border: 'hover:border-cyan-400', btn: 'bg-cyan-950/70 border-cyan-500/40 text-cyan-300 group-hover:bg-cyan-500 group-hover:text-black' },
-                { id: 'MARS' as const, icon: '🔴', name: 'PLANET MARS', base: 'Ares Alpha', dist: '32.0k m', g: '0.38 G', vehicle: 'Martian 4x4', border: 'hover:border-rose-400', btn: 'bg-rose-950/70 border-rose-500/40 text-rose-300 group-hover:bg-rose-500 group-hover:text-black' }
-              ].map((dest) => (
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
+              {PLANET_DESTS.filter((d) => d.id !== currentWorld).map((d) => (
                 <button
-                  key={dest.id}
-                  onClick={() => executeLaunch(dest.id)}
-                  className={`group flex flex-col justify-between p-2 sm:p-3 rounded-lg border border-slate-700/80 ${dest.border} bg-slate-900/60 hover:bg-slate-900 transition-all text-left cursor-pointer active:scale-95 shadow`}
+                  key={d.id}
+                  onClick={() => executeLaunch(d.id)}
+                  className="group flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border border-slate-700/80 hover:border-cyan-400 bg-slate-900/60 hover:bg-slate-900 transition-all text-left cursor-pointer active:scale-95"
                 >
                   <div>
-                    <div className="text-base sm:text-2xl">{dest.icon}</div>
-                    <div className="text-[10.5px] sm:text-sm font-bold text-white tracking-wide mt-0.5">{dest.name}</div>
-                    <div className="text-[8px] sm:text-[10px] text-slate-400 font-mono mb-1.5">{dest.base}</div>
-
-                    <div className="text-[7.5px] sm:text-[9.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
-                      <div className="flex justify-between"><span>DIST:</span><span className="text-slate-200">{dest.dist}</span></div>
-                      <div className="flex justify-between"><span>GRAV:</span><span className="text-emerald-400">{dest.g}</span></div>
-                      <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{dest.vehicle}</span></div>
+                    <div className="text-base sm:text-2xl">{d.icon}</div>
+                    <div className="text-[10px] sm:text-xs font-bold text-white mt-0.5">{d.name}</div>
+                    <div className="text-[7.5px] sm:text-[9px] text-slate-400 font-mono mb-1">{d.base}</div>
+                    <div className="text-[7px] sm:text-[8.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
+                      <div className="flex justify-between"><span>GRAV:</span><span className="text-emerald-400">{d.g}</span></div>
+                      <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{d.v}</span></div>
                     </div>
                   </div>
-
-                  <div className={`w-full py-1 sm:py-1.5 rounded border text-center font-mono font-bold text-[8.5px] sm:text-xs tracking-wider uppercase transition ${dest.btn}`}>
+                  <div className="w-full py-1 rounded border border-cyan-500/40 bg-cyan-950/70 group-hover:bg-cyan-500 group-hover:text-black text-cyan-300 text-center font-mono font-bold text-[8px] sm:text-[10px] uppercase transition">
                     Launch →
                   </div>
                 </button>
               ))}
             </div>
 
-            {/* Footer */}
-            <div className="mt-2 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[10px] text-slate-500 font-mono">
+            <div className="mt-2 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] text-slate-500 font-mono">
               <span>ZEESU-1 NAV</span>
-              <button onClick={() => setShowDestModal(false)} className="text-slate-400 hover:text-white cursor-pointer underline">
-                Cancel
-              </button>
+              <button onClick={() => setShowDestModal(false)} className="text-slate-400 hover:text-white cursor-pointer underline">Cancel</button>
             </div>
           </div>
         </div>
