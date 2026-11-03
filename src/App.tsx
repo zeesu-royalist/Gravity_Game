@@ -436,7 +436,7 @@ export default function App() {
       if (e.code === 'KeyE') handleInteraction();
       if (playerModeRef.current === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlyingRef.current))) handleLaunch();
       if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') {
-        const nearLimit = destinationRef.current === 'MARS' ? 5000 : 4000;
+        const nearLimit = destinationRef.current === 'MARS' ? 15000 : 10000;
         const currentDist = destinationRef.current === 'MARS'
           ? Math.max(0, posRef.current.distanceTo(MARS_POSITION) - MARS_RADIUS)
           : destinationRef.current === 'MOON'
@@ -682,9 +682,9 @@ export default function App() {
   };
 
   const isInSpace = stats.altitude > 3500;
-  // Autopilot button is only visible when rocket approaches Moon, Mars, or Earth (or while autopilot is engaged)
+  // Autopilot button is visible when rocket approaches Moon, Mars, or Earth from distance (or while autopilot is engaged)
   const isNearPlanet = isFlying && playerMode === 'ROCKET' && (
-    stats.targetDist <= (stats.destination === 'MARS' ? 5000 : 4000)
+    stats.targetDist <= (stats.destination === 'MARS' ? 15000 : 10000)
   );
   const showAutopilotBtn = isNearPlanet || autopilot;
 
