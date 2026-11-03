@@ -435,7 +435,17 @@ export default function App() {
       if (isExplodingRef.current || isDeadRef.current) return;
       if (e.code === 'KeyE') handleInteraction();
       if (playerModeRef.current === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlyingRef.current))) handleLaunch();
-      if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') setAutopilot((p) => !p);
+      if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') {
+        const nearLimit = destinationRef.current === 'MARS' ? 5000 : 4000;
+        const currentDist = destinationRef.current === 'MARS'
+          ? Math.max(0, posRef.current.distanceTo(MARS_POSITION) - MARS_RADIUS)
+          : destinationRef.current === 'MOON'
+            ? Math.max(0, posRef.current.distanceTo(MOON_POSITION) - MOON_RADIUS)
+            : posRef.current.distanceTo(EARTH_LANDING_SITE);
+        if (autopilotRef.current || (isFlyingRef.current && currentDist <= nearLimit)) {
+          setAutopilot((p) => !p);
+        }
+      }
       if (playerModeRef.current === 'ROCKET') {
         if (e.code.startsWith('Shift')) setThrottle((p) => Math.min(1.0, p + 0.15));
         if (e.code.startsWith('Control')) setThrottle((p) => Math.max(0.1, p - 0.15));
@@ -672,6 +682,11 @@ export default function App() {
   };
 
   const isInSpace = stats.altitude > 3500;
+  // Autopilot button is only visible when rocket approaches Moon, Mars, or Earth (or while autopilot is engaged)
+  const isNearPlanet = isFlying && playerMode === 'ROCKET' && (
+    stats.targetDist <= (stats.destination === 'MARS' ? 5000 : 4000)
+  );
+  const showAutopilotBtn = isNearPlanet || autopilot;
 
   return (
     <div className={`relative w-full h-full overflow-hidden select-none font-sans transition-colors duration-1000 ${isInSpace ? 'bg-[#000003]' : 'bg-[#87ceeb]'}`}>
@@ -724,26 +739,26 @@ export default function App() {
         <h1 className="text-xl sm:text-3xl md:text-4xl font-extrabold tracking-wider text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
           Z-SPACE
         </h1>
-        <div className="text-[9px] sm:text-xs text-gray-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed max-w-[190px] sm:max-w-xs">
+        <div className="text-[10px] sm:text-xs text-gray-200 drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)] leading-relaxed max-w-[200px] sm:max-w-xs">
           <div className="flex items-center gap-1 flex-wrap">
-            <span>Created by</span>
+            <span className="text-gray-200">Created by</span>
             <a
               href="https://zeesu-royalist.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-300 hover:text-white no-underline transition-colors pointer-events-auto font-medium"
+              className="text-gray-100 hover:text-white no-underline transition-colors pointer-events-auto font-semibold"
               title="Visit Zeesu Royalist"
             >
               Zeesu Royalist
             </a>
           </div>
 
-          <div className="text-[9px] sm:text-[11px] text-gray-300 mt-0.5 leading-normal">
-            Target: {destination === 'MARS' ? 'Mars Cosmodrome' : destination === 'MOON' ? 'Luna Base Alpha' : 'Earth Cosmodrome'}
+          <div className="text-[9px] sm:text-[11px] font-mono text-gray-200 mt-0.5 leading-normal">
+            Status: {isLanded ? 'Surface Touchdown' : isFlying ? (autopilot ? 'Autopilot Flight' : 'Manual Flight') : 'Ready for Launch'}
           </div>
 
-          <div className="text-[9px] sm:text-[10px] font-mono text-gray-400 mt-0.5 leading-normal">
-            Status: {isLanded ? 'Surface Touchdown' : isFlying ? (autopilot ? 'Autopilot Flight' : 'Manual Flight') : 'Ready for Launch'}
+          <div className="text-[9px] sm:text-xs text-gray-200 mt-0.5 leading-normal">
+            Target: {destination === 'MARS' ? 'Mars Cosmodrome' : destination === 'MOON' ? 'Luna Base Alpha' : 'Earth Cosmodrome'}
           </div>
         </div>
       </div>
@@ -886,7 +901,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">T</kbd>
-                  <span className="text-slate-200">for auto pilot</span>
+                  <span className="text-slate-200">for auto pilot (near planet)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">R</kbd>
@@ -1020,19 +1035,21 @@ export default function App() {
             </button>
           </div>
 
-          {/* Small Circle: Autopilot positioned to the left between E & Q */}
-          <button
-            {...actionProps(() => setAutopilot((p) => !p))}
-            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none ${autopilot
-              ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
-              : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
-              }`}
-            title="Autopilot Cruise [T]"
-            aria-label="T for Autopilot Cruise"
-          >
-            <span className="text-[6.5px] sm:text-[8px] font-bold tracking-tight uppercase leading-none">AUTO</span>
-            <span className="text-[5.5px] sm:text-[7px] font-bold tracking-tight uppercase leading-none mt-0.5 opacity-90">PILOT</span>
-          </button>
+          {/* Small Circle: Autopilot positioned to the left between E & Q (Visible when near Moon, Mars, or Earth) */}
+          {showAutopilotBtn && (
+            <button
+              {...actionProps(() => setAutopilot((p) => !p))}
+              className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none animate-in fade-in zoom-in-75 duration-300 ${autopilot
+                ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
+                : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
+                }`}
+              title="Autopilot Cruise [T]"
+              aria-label="T for Autopilot Cruise"
+            >
+              <span className="text-[6.5px] sm:text-[8px] font-bold tracking-tight uppercase leading-none">AUTO</span>
+              <span className="text-[5.5px] sm:text-[7px] font-bold tracking-tight uppercase leading-none mt-0.5 opacity-90">PILOT</span>
+            </button>
+          )}
         </div>
 
         {/* Horizontal Navigation Buttons: Left / Right (side-by-side) */}
