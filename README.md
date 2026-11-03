@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./public/z-space-cover.jpg" alt="Z-SPACE 3D Space Exploration Simulator" width="440" style="border-radius: 24px; box-shadow: 0 10px 40px rgba(0, 240, 255, 0.25);" />
+  <img src="./public/z-space-cover.png" alt="Z-SPACE 3D Space Exploration Simulator" width="400" />
 </p>
 
 <h1 align="center">🚀 Z-SPACE | 3D Space Exploration Simulator</h1>
