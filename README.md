@@ -1,8 +1,17 @@
-# 🚀 Z-SPACE | 3D Space Exploration Simulator
+<p align="center">
+  <img src="./public/z-space-cover.jpg" alt="Z-SPACE 3D Space Exploration Simulator" width="440" style="border-radius: 24px; box-shadow: 0 10px 40px rgba(0, 240, 255, 0.25);" />
+</p>
 
-> **Created & Developed by [Zeesu Royalist](https://zeesu-royalist.vercel.app)**  
-> Portfolio & Projects: [zeesu-royalist.vercel.app](https://zeesu-royalist.vercel.app)  
-> A high-performance, realistic interplanetary spaceflight and planetary exploration simulator built with React, Three.js, React Three Fiber, and TypeScript.
+<h1 align="center">🚀 Z-SPACE | 3D Space Exploration Simulator</h1>
+
+<p align="center">
+  <b>Created & Developed by <a href="https://zeesu-royalist.vercel.app">Zeesu Royalist</a></b><br>
+  <span>Portfolio & Projects: <a href="https://zeesu-royalist.vercel.app">zeesu-royalist.vercel.app</a></span>
+</p>
+
+<p align="center">
+  A high-performance, realistic interplanetary spaceflight and planetary exploration simulator built with React, Three.js, React Three Fiber, and TypeScript.
+</p>
 
 ---
 
