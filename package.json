@@ -2,6 +2,11 @@
   "name": "z-space",
   "private": true,
   "version": "1.0.0",
+  "author": {
+    "name": "Zeesu Royalist",
+    "url": "https://zeesu-royalist.vercel.app"
+  },
+  "homepage": "https://zeesu-royalist.vercel.app",
   "type": "module",
   "scripts": {
     "dev": "vite",

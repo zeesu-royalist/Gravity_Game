@@ -725,7 +725,18 @@ export default function App() {
           Z-SPACE
         </h1>
         <div className="text-[10px] sm:text-sm text-slate-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] leading-relaxed max-w-[170px] sm:max-w-xs">
-          <div>Powered by Zeesu Royalist</div>
+          <div className="flex items-center gap-1 flex-wrap">
+            <span>Created by</span>
+            <a
+              href="https://zeesu-royalist.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-cyan-300 hover:text-cyan-100 underline decoration-cyan-400/50 hover:decoration-cyan-200 transition-colors pointer-events-auto font-semibold"
+              title="Visit Zeesu Royalist"
+            >
+              Zeesu Royalist
+            </a>
+          </div>
           <div className="text-[9px] sm:text-xs text-slate-400 mt-0.5">
             Target: {destination === 'MARS' ? 'Mars Cosmodrome' : destination === 'MOON' ? 'Luna Base Alpha' : 'Earth Cosmodrome'}
           </div>
@@ -879,6 +890,20 @@ export default function App() {
                   <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">R</kbd>
                   <span className="text-slate-200">for restart</span>
                 </div>
+              </div>
+
+              {/* Creator Credit Link */}
+              <div className="mt-3 pt-2.5 border-t border-white/10 text-center">
+                <a
+                  href="https://zeesu-royalist.vercel.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] font-mono text-cyan-400 hover:text-cyan-200 transition-colors"
+                  title="Portfolio"
+                >
+                  <span>zeesu-royalist.vercel.app</span>
+                  <span className="text-[9px] opacity-75">↗</span>
+                </a>
               </div>
             </div>
           )}

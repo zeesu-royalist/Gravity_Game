@@ -1,6 +1,7 @@
 # 🚀 Z-SPACE | 3D Space Exploration Simulator
 
-> **Powered by Zeesu Royalist**  
+> **Created & Developed by [Zeesu Royalist](https://zeesu-royalist.vercel.app)**  
+> Portfolio & Projects: [zeesu-royalist.vercel.app](https://zeesu-royalist.vercel.app)  
 > A high-performance, realistic interplanetary spaceflight and planetary exploration simulator built with React, Three.js, React Three Fiber, and TypeScript.
 
 ---
@@ -89,6 +90,7 @@
 
 ---
 
-## 📄 License
+## 📄 License & Credits
 
-MIT License. Designed and Developed by **Zeesu Royalist**.
+MIT License. Designed and Developed with ❤️ by **[Zeesu Royalist](https://zeesu-royalist.vercel.app)**.
+
