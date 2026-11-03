@@ -25,6 +25,27 @@ const PLANET_DESTS = [
   { id: 'MARS' as const, icon: '🔴', name: 'MARS', base: 'Ares Base', g: '0.38G', v: 'Martian 4x4' },
 ];
 
+const LOCKED_DESTS = [
+  {
+    id: 'SPACE_STATION',
+    icon: '🛰️',
+    name: 'SPACE STATION',
+    base: 'Orbital Dock',
+    g: '0.0G',
+    v: 'EVA Pod',
+    price: 50,
+  },
+  {
+    id: 'SATURN',
+    icon: '🪐',
+    name: 'SATURN',
+    base: 'Titan Rings',
+    g: '1.06G',
+    v: 'Hover Probe',
+    price: 70,
+  },
+];
+
 function UniversalThirdPersonCamera({
   playerMode, rocketPos, astronautPos, roverPos, resetCount,
 }: {
@@ -174,6 +195,15 @@ function PolygonArrowRight() {
 export default function App() {
   const [destination, setDestination] = useState<'MOON' | 'MARS' | 'EARTH'>('MOON');
   const [showDestModal, setShowDestModal] = useState(false);
+  const [lockedPaymentDest, setLockedPaymentDest] = useState<{
+    id: string;
+    icon: string;
+    name: string;
+    base: string;
+    g: string;
+    v: string;
+    price: number;
+  } | null>(null);
   const [showActionsInfo, setShowActionsInfo] = useState(false);
   const [isFlying, setIsFlying] = useState(false);
   const [isLanded, setIsLanded] = useState(false);
@@ -790,13 +820,14 @@ export default function App() {
       {/* Destination Selection Modal */}
       {showDestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 select-none">
-          <div className="w-full max-w-[280px] sm:max-w-sm bg-[#050813]/95 border border-cyan-500/30 rounded-xl p-2.5 sm:p-3.5 shadow-2xl text-white">
+          <div className="w-full max-w-[320px] sm:max-w-[420px] bg-[#050813]/95 border border-cyan-500/30 rounded-xl p-2.5 sm:p-3.5 shadow-2xl text-white max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-white/10 text-[9.5px] sm:text-xs font-mono text-cyan-400 font-bold">
               <span>SELECT DESTINATION • {currentWorld}</span>
               <button onClick={() => setShowDestModal(false)} className="text-slate-400 hover:text-white cursor-pointer text-xs px-1">✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
+              {/* Unlocked Available Destinations */}
               {PLANET_DESTS.filter((d) => d.id !== currentWorld).map((d) => (
                 <button
                   key={d.id}
@@ -817,11 +848,118 @@ export default function App() {
                   </div>
                 </button>
               ))}
+
+              {/* Locked Destinations: Space Station 🛰️ & Saturn 🪐 */}
+              {LOCKED_DESTS.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => setLockedPaymentDest(d)}
+                  className="group relative flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border border-amber-500/40 hover:border-amber-400 bg-gradient-to-b from-amber-950/25 to-slate-900/90 hover:bg-amber-950/35 transition-all text-left cursor-pointer active:scale-95 shadow-[0_0_10px_rgba(245,158,11,0.08)]"
+                >
+                  {/* Top-Right Price Lock Pill */}
+                  <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-[7px] sm:text-[8px] font-mono font-bold text-amber-300">
+                    <span>🔒</span>
+                    <span>₹{d.price}</span>
+                  </div>
+
+                  <div>
+                    <div className="text-base sm:text-2xl">{d.icon}</div>
+                    <div className="text-[10px] sm:text-xs font-bold text-white group-hover:text-amber-200 mt-0.5">{d.name}</div>
+                    <div className="text-[7.5px] sm:text-[9px] text-amber-300/80 font-mono mb-1">{d.base}</div>
+                    <div className="text-[7px] sm:text-[8.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
+                      <div className="flex justify-between"><span>GRAV:</span><span className="text-amber-400">{d.g}</span></div>
+                      <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{d.v}</span></div>
+                    </div>
+                  </div>
+                  <div className="w-full py-1 rounded border border-amber-500/60 bg-amber-500/20 group-hover:bg-amber-500 group-hover:text-black text-amber-300 text-center font-mono font-bold text-[7.5px] sm:text-[9.5px] uppercase transition flex items-center justify-center gap-1">
+                    <span>🔒</span>
+                    <span>₹{d.price} to unlock</span>
+                  </div>
+                </button>
+              ))}
             </div>
 
             <div className="mt-2 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] text-slate-500 font-mono">
               <span>ZEESU-1 NAV</span>
               <button onClick={() => setShowDestModal(false)} className="text-slate-400 hover:text-white cursor-pointer underline">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paytm QR Scanner Modal for Locked Destinations */}
+      {lockedPaymentDest && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 select-none">
+          <div className="w-full max-w-[290px] sm:max-w-[330px] bg-[#070b16] border border-cyan-500/40 rounded-2xl overflow-hidden shadow-[0_0_40px_rgba(0,185,245,0.25)] text-white flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
+            {/* Top Paytm / Brand Header */}
+            <div className="w-full bg-gradient-to-r from-[#002970] via-[#004299] to-[#00b9f5] px-3.5 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="bg-white px-2 py-0.5 rounded shadow-sm flex items-center leading-none">
+                  <span className="font-extrabold text-[12px] tracking-tight text-[#002970]">pay</span>
+                  <span className="font-extrabold text-[12px] tracking-tight text-[#00b9f5]">tm</span>
+                </div>
+                <span className="text-[10px] font-mono text-cyan-100 font-bold tracking-wider">QR SCANNER</span>
+              </div>
+              <button
+                onClick={() => setLockedPaymentDest(null)}
+                className="text-white/80 hover:text-white bg-black/20 hover:bg-black/40 rounded-full w-6 h-6 flex items-center justify-center cursor-pointer transition text-xs font-bold"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Destination Info & Price */}
+            <div className="w-full px-4 pt-3 pb-2 text-center border-b border-white/10 bg-slate-900/50">
+              <div className="text-2xl">{lockedPaymentDest.icon}</div>
+              <div className="text-xs sm:text-sm font-bold text-white tracking-wide mt-0.5">
+                Unlock {lockedPaymentDest.name}
+              </div>
+              <div className="text-[8.5px] sm:text-[9.5px] text-slate-400 font-mono">
+                {lockedPaymentDest.base} • Mission Asset: {lockedPaymentDest.v}
+              </div>
+              <div className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono">
+                <span className="text-[9px] uppercase tracking-wider text-slate-300">To Unlock:</span>
+                <span className="text-sm sm:text-base font-extrabold text-amber-400">₹{lockedPaymentDest.price}</span>
+              </div>
+            </div>
+
+            {/* Scanner / QR Display */}
+            <div className="p-3.5 sm:p-4 flex flex-col items-center w-full">
+              <div className="relative p-2 bg-white rounded-xl shadow-lg border-2 border-cyan-400/60 max-w-[210px]">
+                {/* Scanner Target Corners */}
+                <div className="absolute -top-1.5 -left-1.5 w-4 h-4 border-t-[3px] border-l-[3px] border-cyan-400"></div>
+                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 border-t-[3px] border-r-[3px] border-cyan-400"></div>
+                <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 border-b-[3px] border-l-[3px] border-cyan-400"></div>
+                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 border-b-[3px] border-r-[3px] border-cyan-400"></div>
+
+                {/* Animated Scanner Laser Beam */}
+                <div className="absolute inset-x-2 top-0 h-0.5 bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-pulse pointer-events-none z-10"></div>
+
+                {/* QR Code Image */}
+                <img
+                  src="/paytm-qr.png"
+                  alt="Paytm QR Scanner"
+                  className="w-44 h-auto object-contain rounded select-none pointer-events-none"
+                />
+              </div>
+
+              <div className="mt-2.5 flex items-center gap-1.5 text-[8.5px] sm:text-[9px] font-mono text-emerald-400 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>Paytm • PhonePe • Google Pay • BHIM UPI</span>
+              </div>
+
+              <p className="mt-1 text-[7.5px] sm:text-[8px] text-slate-400 text-center font-mono max-w-[250px]">
+                Scan with any UPI app to pay ₹{lockedPaymentDest.price} and unlock {lockedPaymentDest.name}
+              </p>
+
+              {/* Close / Return Button */}
+              <button
+                onClick={() => setLockedPaymentDest(null)}
+                className="w-full mt-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-[9px] sm:text-[10px] font-bold cursor-pointer transition text-center"
+              >
+                ← Back to Destinations
+              </button>
             </div>
           </div>
         </div>
@@ -921,20 +1059,6 @@ export default function App() {
                   <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">R</kbd>
                   <span className="text-slate-200">for restart</span>
                 </div>
-              </div>
-
-              {/* Creator Credit Link */}
-              <div className="mt-3 pt-2.5 border-t border-white/10 text-center">
-                <a
-                  href="https://zeesu-royalist.vercel.app"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] font-mono text-cyan-400 hover:text-cyan-200 transition-colors"
-                  title="Portfolio"
-                >
-                  <span>zeesu-royalist.vercel.app</span>
-                  <span className="text-[9px] opacity-75">↗</span>
-                </a>
               </div>
             </div>
           )}
