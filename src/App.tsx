@@ -828,13 +828,13 @@ export default function App() {
       )}
 
       {/* 3. BOTTOM-LEFT: Shoot Weapon, Vertical Navigation Buttons & Flight Controls Info */}
-      <div className="absolute bottom-3 sm:bottom-6 left-3 sm:left-6 z-20 flex flex-col gap-2 sm:gap-2.5 select-none pointer-events-auto">
-        {/* Vertical Buttons: Shoot, Up, Down */}
-        <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+      <div className="absolute bottom-3 sm:bottom-6 left-3 sm:left-6 z-20 flex flex-col items-start gap-2 sm:gap-2.5 select-none pointer-events-auto">
+        {/* Vertical Buttons: Shoot, Up, Down (Locked to the left edge) */}
+        <div className="flex flex-col items-start w-fit gap-1.5 sm:gap-2">
           {/* Circle: Shoot Gun (Positioned directly above Up Button) */}
           <button
             {...qProps}
-            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${isAtMars && playerMode === 'ASTRONAUT'
+            className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${isAtMars && playerMode === 'ASTRONAUT'
               ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
               : 'border-slate-700/80 hover:border-cyan-400'
               }`}
