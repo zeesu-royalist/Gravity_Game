@@ -257,21 +257,34 @@ export default function App() {
   const marsAstroPosRef = useRef(new THREE.Vector3(MARS_LANDING_SITE.x + 3.8, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 1.8));
   const marsRoverPosRef = useRef(new THREE.Vector3(MARS_LANDING_SITE.x + 11.0, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z + 5.5));
 
-  const isAtMoon = posRef.current.distanceTo(MOON_LANDING_SITE) < 80;
-  const isAtMars = posRef.current.distanceTo(MARS_LANDING_SITE) < 80;
-  const currentWorld: 'EARTH' | 'MOON' | 'MARS' = isAtMars ? 'MARS' : isAtMoon ? 'MOON' : 'EARTH';
+  const [currentWorld, setCurrentWorld] = useState<'EARTH' | 'MOON' | 'MARS'>('EARTH');
+  const isAtMoon = currentWorld === 'MOON';
+  const isAtMars = currentWorld === 'MARS';
+  const launchOriginRef = useRef<'EARTH' | 'MOON' | 'MARS'>('EARTH');
+  const destinationRef = useRef(destination);
+  destinationRef.current = destination;
+  const throttleRef = useRef(throttle);
+  throttleRef.current = throttle;
+  const lastStatUpdate = useRef(0);
 
   const executeLaunch = (chosenDest?: 'MOON' | 'MARS' | 'EARTH') => {
     if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
     if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
     setIsExploding(false);
     setAsteroidAlert(null);
-    if (chosenDest) setDestination(chosenDest);
+    if (chosenDest) {
+      setDestination(chosenDest);
+      destinationRef.current = chosenDest;
+    }
+    launchOriginRef.current = currentWorld;
     setShowDestModal(false);
     setIsFlying(true);
+    isFlyingRef.current = true;
     setIsLanded(false);
+    isLandedRef.current = false;
     setPlayerMode('ROCKET');
-    velRef.current.set(0, 35, 0);
+    playerModeRef.current = 'ROCKET';
+    velRef.current.set(0, 40, 0);
     rotRef.current.set(0, 0, 0, 'YXZ');
     quatRef.current.set(0, 0, 0, 1);
   };
@@ -288,12 +301,20 @@ export default function App() {
     setIsExploding(false);
     setAsteroidAlert(null);
     setIsFlying(false);
+    isFlyingRef.current = false;
     setIsLanded(false);
+    isLandedRef.current = false;
     setAutopilot(false);
+    autopilotRef.current = false;
     setDestination('MOON');
+    destinationRef.current = 'MOON';
+    setCurrentWorld('EARTH');
+    launchOriginRef.current = 'EARTH';
     setShowDestModal(false);
     setPlayerMode('ROCKET');
+    playerModeRef.current = 'ROCKET';
     setThrottle(1.0);
+    throttleRef.current = 1.0;
     posRef.current.set(0, 0.2, 0);
     velRef.current.set(0, 0, 0);
     rotRef.current.set(0, 0, 0, 'YXZ');
@@ -421,32 +442,50 @@ export default function App() {
     let lastTime = performance.now();
 
     const loop = (now: number) => {
-      const delta = Math.min(0.1, (now - lastTime) / 1000);
+      const delta = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
-      if (isFlying && !isLanded && !isExplodingRef.current) {
+      if (isFlyingRef.current && !isLandedRef.current && !isExplodingRef.current) {
         const keys = keysRef.current, pos = posRef.current, vel = velRef.current;
-        const isMars = destination === 'MARS';
-        const isMoon = destination === 'MOON';
+        const dest = destinationRef.current;
+        const isMars = dest === 'MARS';
+        const isMoon = dest === 'MOON';
         const targetPad = isMars ? MARS_LANDING_SITE : isMoon ? MOON_LANDING_SITE : EARTH_LANDING_SITE;
         const altAbovePad = pos.y - targetPad.y;
         const hDistToPad = Math.hypot(pos.x - targetPad.x, pos.z - targetPad.z);
 
-        const landRocket = (pad: THREE.Vector3, nextDest: 'MOON' | 'MARS' | 'EARTH') => {
+        const landRocket = (pad: THREE.Vector3, landedWorld: 'MOON' | 'MARS' | 'EARTH') => {
           pos.copy(pad);
           vel.set(0, 0, 0);
           rotRef.current.set(0, 0, 0, 'YXZ');
           quatRef.current.set(0, 0, 0, 1);
           setIsLanded(true);
+          isLandedRef.current = true;
           setIsFlying(false);
+          isFlyingRef.current = false;
           setAutopilot(false);
-          setDestination(nextDest);
+          autopilotRef.current = false;
+          setDestination(landedWorld);
+          destinationRef.current = landedWorld;
+          setCurrentWorld(landedWorld);
+          launchOriginRef.current = landedWorld;
         };
 
         let rcsPitch = 0, rcsYaw = 0;
 
-        if (autopilot) {
-          if (altAbovePad <= 0.8 && hDistToPad <= 24.0) {
+        // Safe departure clearance: prevents ground clamp snapping / collision fight on planetary launch
+        const originWorld = launchOriginRef.current;
+        const originPad = originWorld === 'MARS' ? MARS_LANDING_SITE : originWorld === 'MOON' ? MOON_LANDING_SITE : EARTH_LANDING_SITE;
+        const isDeparting = pos.distanceTo(originPad) < 280;
+
+        if (autopilotRef.current) {
+          if (isDeparting) {
+            const depWaypoint = new THREE.Vector3(originPad.x, originPad.y + 400, originPad.z);
+            const toDep = depWaypoint.clone().sub(pos).normalize();
+            quatRef.current.slerp(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), toDep), delta * 4.0);
+            vel.lerp(new THREE.Vector3(0, 180, 0), delta * 3.0);
+            pos.addScaledVector(vel, delta);
+          } else if (altAbovePad <= 0.8 && hDistToPad <= 24.0) {
             landRocket(targetPad, isMars ? 'MARS' : isMoon ? 'MOON' : 'EARTH');
           } else if (altAbovePad < 250 && hDistToPad < 140) {
             quatRef.current.slerp(new THREE.Quaternion(), delta * 4.5);
@@ -464,7 +503,7 @@ export default function App() {
             vel.lerp(new THREE.Vector3(0, 1, 0).applyQuaternion(quatRef.current).multiplyScalar(cruiseSpeed), delta * 2.8);
             pos.addScaledVector(vel, delta);
           }
-        } else if (playerMode === 'ROCKET') {
+        } else if (playerModeRef.current === 'ROCKET') {
           const turn = pos.y > 3500 ? 1.6 : 1.2;
           if (keys['KeyW'] || keys['ArrowDown']) { rotRef.current.x -= turn * delta; rcsPitch = -1; }
           if (keys['KeyS'] || keys['ArrowUp']) { rotRef.current.x += turn * delta; rcsPitch = 1; }
@@ -476,7 +515,7 @@ export default function App() {
           quatRef.current.setFromEuler(rotRef.current);
           const fwd = new THREE.Vector3(0, 1, 0).applyQuaternion(quatRef.current);
           const boost = THREE.MathUtils.clamp((pos.y - 2000) / 4000, 0, 1);
-          vel.addScaledVector(fwd, (38 + boost * 85) * throttle * delta);
+          vel.addScaledVector(fwd, (38 + boost * 85) * throttleRef.current * delta);
 
           if (pos.y > 0.2 && pos.y < 2500 && Math.hypot(pos.x, pos.z) < 3000) vel.y -= 9.8 * (1 - pos.y / 2500) * delta;
           pos.addScaledVector(vel, delta);
@@ -490,10 +529,14 @@ export default function App() {
           }
         }
 
-        // Hard ground clamp
+        // Hard ground clamp (safe departure without snapping or glitching)
         if (pos.y < 0.2 && Math.hypot(pos.x, pos.z) < 3000) { pos.y = 0.2; if (vel.y < 0) vel.y = 0; }
-        if (pos.distanceTo(MOON_POSITION) < MOON_RADIUS + 30 && pos.y < MOON_TOUCHDOWN_Y) { pos.y = MOON_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
-        if (pos.distanceTo(MARS_POSITION) < MARS_RADIUS + 30 && pos.y < MARS_TOUCHDOWN_Y) { pos.y = MARS_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
+        if (originWorld !== 'MOON' || !isDeparting) {
+          if (pos.distanceTo(MOON_POSITION) < MOON_RADIUS + 30 && pos.y < MOON_TOUCHDOWN_Y) { pos.y = MOON_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
+        }
+        if (originWorld !== 'MARS' || !isDeparting) {
+          if (pos.distanceTo(MARS_POSITION) < MARS_RADIUS + 30 && pos.y < MARS_TOUCHDOWN_Y) { pos.y = MARS_TOUCHDOWN_Y; if (vel.y < 0) vel.y = 0; }
+        }
 
         rcsActiveRef.current = { pitch: rcsPitch, yaw: rcsYaw };
         const destDist = isMars
@@ -503,20 +546,23 @@ export default function App() {
             : Math.round(pos.distanceTo(EARTH_LANDING_SITE));
         const targetDist = destDist;
 
-        setStats({
-          altitude: Math.max(0, Math.round(pos.y)),
-          speed: !isFlying && isLanded ? 0 : Math.round(vel.length() * 3.6),
-          targetDist,
-          destination,
-          stage: getMissionStage(destination, pos.y, destDist, targetDist, isFlying, isLanded, currentWorld),
-        });
+        if (now - lastStatUpdate.current > 60) {
+          lastStatUpdate.current = now;
+          setStats({
+            altitude: Math.max(0, Math.round(pos.y)),
+            speed: Math.round(vel.length() * 3.6),
+            targetDist,
+            destination: dest,
+            stage: getMissionStage(dest, pos.y, destDist, targetDist, true, false, originWorld),
+          });
+        }
       }
       animId = requestAnimationFrame(loop);
     };
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isFlying, isLanded, autopilot, throttle, playerMode, destination, currentWorld]);
+  }, [isFlying, isLanded, resetCount]);
 
   const handleDpad = (code: string, pressed: boolean) => {
     keysRef.current[code] = pressed;
