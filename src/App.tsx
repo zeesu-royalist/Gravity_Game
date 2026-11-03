@@ -814,11 +814,10 @@ export default function App() {
                   <button
                     key={d.id}
                     onClick={() => isLocked ? setLockedPaymentDest(d as any) : executeLaunch(d.id as any)}
-                    className={`group relative flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border text-left cursor-pointer active:scale-95 transition-all ${
-                      isLocked
+                    className={`group relative flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border text-left cursor-pointer active:scale-95 transition-all ${isLocked
                         ? 'border-amber-500/40 hover:border-amber-400 bg-gradient-to-b from-amber-950/25 to-slate-900/90 hover:bg-amber-950/35 shadow-[0_0_10px_rgba(245,158,11,0.08)]'
                         : 'border-slate-700/80 hover:border-cyan-400 bg-slate-900/60 hover:bg-slate-900'
-                    }`}
+                      }`}
                   >
                     {isLocked && (
                       <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-[7px] sm:text-[8px] font-mono font-bold text-amber-300">
@@ -834,11 +833,10 @@ export default function App() {
                         <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{d.v}</span></div>
                       </div>
                     </div>
-                    <div className={`w-full py-1 rounded border text-center font-mono font-bold transition flex items-center justify-center gap-1 ${
-                      isLocked
+                    <div className={`w-full py-1 rounded border text-center font-mono font-bold transition flex items-center justify-center gap-1 ${isLocked
                         ? 'border-amber-500/60 bg-amber-500/20 group-hover:bg-amber-500 group-hover:text-black text-amber-300 text-[7.5px] sm:text-[9.5px]'
                         : 'border-cyan-500/40 bg-cyan-950/70 group-hover:bg-cyan-500 group-hover:text-black text-cyan-300 text-[8px] sm:text-[10px] uppercase'
-                    }`}>
+                      }`}>
                       {isLocked ? `🔒 ₹${d.price} to unlock` : 'Launch →'}
                     </div>
                   </button>
@@ -911,7 +909,6 @@ export default function App() {
               </div>
 
               <div className="mt-2.5 flex items-center gap-1.5 text-[8.5px] sm:text-[9px] font-mono text-emerald-400 font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
                 <span>Paytm • PhonePe • Google Pay • BHIM UPI</span>
               </div>
 
