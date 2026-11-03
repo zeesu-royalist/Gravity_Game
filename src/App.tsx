@@ -693,11 +693,6 @@ export default function App() {
   };
 
   const isInSpace = stats.altitude > 3500;
-  // Autopilot button is visible when rocket approaches Moon, Mars, or Earth from moderate distance (or while autopilot is engaged)
-  const isNearPlanet = isFlying && playerMode === 'ROCKET' && (
-    stats.targetDist <= (stats.destination === 'MARS' ? 9000 : 7000)
-  );
-  const showAutopilotBtn = isNearPlanet || autopilot;
 
   return (
     <div className={`relative w-full h-full overflow-hidden select-none font-sans transition-colors duration-1000 ${isInSpace ? 'bg-[#000003]' : 'bg-[#87ceeb]'}`}>
@@ -1121,21 +1116,19 @@ export default function App() {
             </button>
           </div>
 
-          {/* Small Circle: Autopilot positioned to the left of the action buttons (Visible when near Moon, Mars, or Earth) */}
-          {showAutopilotBtn && (
-            <button
-              {...actionProps(() => setAutopilot((p) => !p))}
-              className={`absolute right-full mr-2.5 sm:mr-3 bottom-[35px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none animate-in fade-in zoom-in-75 duration-300 ${autopilot
-                ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
-                : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
-                }`}
-              title="Autopilot Cruise [T]"
-              aria-label="T for Autopilot Cruise"
-            >
-              <span className="text-[6.5px] sm:text-[8px] font-bold tracking-tight uppercase leading-none">AUTO</span>
-              <span className="text-[5.5px] sm:text-[7px] font-bold tracking-tight uppercase leading-none mt-0.5 opacity-90">PILOT</span>
-            </button>
-          )}
+          {/* Small Circle: Autopilot positioned to the left of the action buttons */}
+          <button
+            {...actionProps(() => setAutopilot((p) => !p))}
+            className={`absolute right-full mr-2.5 sm:mr-3 bottom-[35px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none ${autopilot
+              ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
+              : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
+              }`}
+            title="Autopilot Cruise [T]"
+            aria-label="T for Autopilot Cruise"
+          >
+            <span className="text-[6.5px] sm:text-[8px] font-bold tracking-tight uppercase leading-none">AUTO</span>
+            <span className="text-[5.5px] sm:text-[7px] font-bold tracking-tight uppercase leading-none mt-0.5 opacity-90">PILOT</span>
+          </button>
         </div>
 
         {/* Horizontal Navigation Buttons: Left / Right (side-by-side) */}
