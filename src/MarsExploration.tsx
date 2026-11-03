@@ -52,6 +52,7 @@ interface MarsExplorationProps {
   roverPosRef: React.MutableRefObject<THREE.Vector3>;
   keysRef: React.MutableRefObject<{ [key: string]: boolean }>;
   rocketOnMars?: boolean;
+  onAstronautHit?: (damage: number) => void;
 }
 
 export const MarsExploration: React.FC<MarsExplorationProps> = ({
@@ -62,6 +63,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
   roverPosRef,
   keysRef,
   rocketOnMars = true,
+  onAstronautHit,
 }) => {
   const astronautRotY = useRef(0);
   const astronautQuat = useRef(new THREE.Quaternion());
@@ -272,6 +274,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         playerMode={playerMode}
         isShooting={playerMode === 'ASTRONAUT' && !!keysRef.current['KeyQ']}
         active={isLanded && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')}
+        onAstronautHit={onAstronautHit}
         onThreatChange={(threat) => {
           lastThreat.current = threat;
           if (threat.allDead && keysRef.current) {

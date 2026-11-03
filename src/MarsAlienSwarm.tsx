@@ -96,6 +96,34 @@ function playScreech(isAggressive = false) {
   } catch (_) {}
 }
 
+export function playAstronautDamageSound() {
+  try {
+    const ctx = getAudio(); if (!ctx) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.16);
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.16);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 0.16);
+  } catch (_) {}
+}
+
+export function playAstronautDeathSound() {
+  try {
+    const ctx = getAudio(); if (!ctx) return;
+    const t = ctx.currentTime, osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(240, t);
+    osc.frequency.exponentialRampToValueAtTime(25, t + 1.2);
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t); osc.stop(t + 1.2);
+  } catch (_) {}
+}
+
 // Module-level scratch memory for zero-allocation performance
 const _qNorm = new THREE.Vector3();
 const _qFwd = new THREE.Vector3();
@@ -122,6 +150,7 @@ export interface MarsAlienSwarmProps {
   isShooting?: boolean;
   active: boolean;
   onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean; kills?: number; allDead?: boolean }) => void;
+  onAstronautHit?: (damage: number) => void;
 }
 
 interface AlienSimData {
@@ -254,9 +283,11 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   isShooting = false,
   active,
   onThreatChange,
+  onAstronautHit,
 }) => {
   const lastThreatUpdate = useRef(0);
   const lastShoot = useRef(0);
+  const lastHitTime = useRef(0);
 
   const { scene: masterScene, animations } = useGLTF(MODEL_URL);
 
@@ -346,6 +377,7 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
     });
     bulletsRef.current.forEach((b) => { b.active = false; });
     sparksRef.current.forEach((s) => { s.active = false; });
+    lastHitTime.current = 0;
   };
 
   if ((prevPlayerMode.current === 'ROCKET' || !prevActive.current) && active && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')) {
@@ -587,6 +619,16 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
     }
 
     if (minDistance < 28 && aliveCount > 0) playScreech(anyAttacking);
+
+    // Astronaut Melee Damage on Mars (Balanced survival time)
+    if (playerMode === 'ASTRONAUT' && anyAttacking && onAstronautHit && minDistance <= 4.5) {
+      const now = performance.now();
+      if (now - lastHitTime.current > 900) {
+        lastHitTime.current = now;
+        playAstronautDamageSound();
+        onAstronautHit(5);
+      }
+    }
 
     // Throttled HUD Combat Telemetry
     const nowTime = performance.now();

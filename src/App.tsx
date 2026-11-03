@@ -10,6 +10,7 @@ import { RealisticLandscape } from './RealisticLandscape';
 import { SpaceEnvironment, MOON_POSITION, MOON_RADIUS, MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 import { MoonExploration, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE } from './MoonExploration';
 import { MarsExploration, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE } from './MarsExploration';
+import { playAstronautDeathSound } from './MarsAlienSwarm';
 import { EarthExploration, EARTH_CAR_DEFAULT_POS, EARTH_ASTRONAUT_DEFAULT_POS } from './EarthExploration';
 import { BuranLaunchpad, ActiveRocketMesh, LunarLandingSiteMarker } from './Rocket';
 import { AsteroidBelt } from './AsteroidBelt';
@@ -180,6 +181,10 @@ export default function App() {
   const [throttle, setThrottle] = useState(1.0);
   const [resetCount, setResetCount] = useState(0);
   const [playerMode, setPlayerMode] = useState<'ROCKET' | 'ASTRONAUT' | 'ROVER'>('ROCKET');
+  const [astronautHealth, setAstronautHealth] = useState(100);
+  const [isDead, setIsDead] = useState(false);
+  const isDeadRef = useRef(false);
+  const deadTimeoutRef = useRef<any>(null);
   const [isExploding, setIsExploding] = useState(false);
   const [asteroidAlert, setAsteroidAlert] = useState<{ message: string; type: 'BLAST' | 'DEFLECTION' } | null>(null);
   const blastTimeoutRef = useRef<any>(null);
@@ -298,6 +303,10 @@ export default function App() {
   const handleReset = useCallback(() => {
     if (blastTimeoutRef.current) clearTimeout(blastTimeoutRef.current);
     if (alertTimeoutRef.current) clearTimeout(alertTimeoutRef.current);
+    if (deadTimeoutRef.current) clearTimeout(deadTimeoutRef.current);
+    setIsDead(false);
+    isDeadRef.current = false;
+    setAstronautHealth(100);
     setIsExploding(false);
     setAsteroidAlert(null);
     setIsFlying(false);
@@ -329,6 +338,23 @@ export default function App() {
     setResetCount((c) => c + 1);
     setStats({ altitude: 0, speed: 0, targetDist: 19500, destination: 'MOON', stage: 'STANDBY ON EARTH PAD' });
   }, []);
+
+  const handleAstronautDamage = useCallback((damage: number) => {
+    if (isDeadRef.current) return;
+    setAstronautHealth((prev) => {
+      const next = Math.max(0, prev - damage);
+      if (next <= 0 && !isDeadRef.current) {
+        isDeadRef.current = true;
+        setIsDead(true);
+        playAstronautDeathSound();
+        if (deadTimeoutRef.current) clearTimeout(deadTimeoutRef.current);
+        deadTimeoutRef.current = setTimeout(() => {
+          handleReset();
+        }, 2200);
+      }
+      return next;
+    });
+  }, [handleReset]);
 
   const handleAsteroidBlast = useCallback((_astPos: THREE.Vector3, radius: number) => {
     setIsExploding(true);
@@ -379,12 +405,23 @@ export default function App() {
     if (isFlyingRef.current || isExplodingRef.current) return;
     if (playerModeRef.current === 'ROCKET') setPlayerMode('ASTRONAUT');
     else if (playerModeRef.current === 'ASTRONAUT') {
-      if (hudStateRef.current.canEnterRover) setPlayerMode('ROVER');
-      else if (hudStateRef.current.canEnterRocket) setPlayerMode('ROCKET');
+      if (hudStateRef.current.canEnterRover) {
+        setPlayerMode('ROVER');
+        setAstronautHealth(100);
+      } else if (hudStateRef.current.canEnterRocket) {
+        setPlayerMode('ROCKET');
+        setAstronautHealth(100);
+      }
     } else if (playerModeRef.current === 'ROVER') {
       setPlayerMode('ASTRONAUT');
     }
   };
+
+  useEffect(() => {
+    if (playerMode === 'ROVER' || playerMode === 'ROCKET') {
+      setAstronautHealth(100);
+    }
+  }, [playerMode]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -395,7 +432,7 @@ export default function App() {
         return;
       }
       if (e.code === 'KeyR') { handleReset(); return; }
-      if (isExplodingRef.current) return;
+      if (isExplodingRef.current || isDeadRef.current) return;
       if (e.code === 'KeyE') handleInteraction();
       if (playerModeRef.current === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlyingRef.current))) handleLaunch();
       if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') setAutopilot((p) => !p);
@@ -565,12 +602,14 @@ export default function App() {
   }, [isFlying, isLanded, resetCount]);
 
   const handleDpad = (code: string, pressed: boolean) => {
+    if (isDeadRef.current) return;
     keysRef.current[code] = pressed;
     if (pressed && autopilot) setAutopilot(false);
   };
 
   // Mobile & Touch Input Engine: Instant One-Touch Response + Duplicate Event Deduplication
   const triggerAction = (fn: () => void) => {
+    if (isDeadRef.current) return;
     const now = performance.now();
     if (now - lastActionTime.current < 200) return;
     lastActionTime.current = now;
@@ -603,6 +642,7 @@ export default function App() {
   });
 
   const fireGun = (pressed: boolean) => {
+    if (isDeadRef.current) return;
     shootingHoldRef.current = pressed;
     if (pressed) {
       keysRef.current['KeyQ'] = true;
@@ -635,9 +675,24 @@ export default function App() {
 
   return (
     <div className={`relative w-full h-full overflow-hidden select-none font-sans transition-colors duration-1000 ${isInSpace ? 'bg-[#000003]' : 'bg-[#87ceeb]'}`}>
-      {/* Xenomorph Attack Screen Vignette */}
-      {isAtMars && hudState.alienThreat?.isAttacking && (
+      {/* Xenomorph Attack & Danger Screen Vignette */}
+      {isAtMars && (hudState.alienThreat?.isAttacking || (playerMode === 'ASTRONAUT' && astronautHealth < 35)) && (
         <div className="pointer-events-none fixed inset-0 z-20 shadow-[inset_0_0_120px_rgba(239,68,68,0.5)] border-4 border-red-500/40 transition-opacity duration-300" />
+      )}
+
+      {/* Astronaut Death Screen Overlay */}
+      {isDead && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-md select-none animate-in fade-in duration-300 px-4">
+          <div className="text-red-500 text-3xl sm:text-5xl font-black tracking-widest uppercase mb-2 animate-pulse text-center">
+            SUIT BREACHED
+          </div>
+          <div className="text-slate-300 text-xs sm:text-sm font-mono text-center max-w-sm mb-4">
+            Astronaut vital signs lost on Mars. Critical life support system failure.
+          </div>
+          <div className="text-cyan-400 text-[10px] sm:text-xs font-mono tracking-widest uppercase bg-cyan-950/70 border border-cyan-500/40 px-3 py-1.5 rounded-full animate-bounce">
+            Evacuating to Earth Cosmodrome...
+          </div>
+        </div>
       )}
 
       {/* Catastrophic Asteroid Blast Screen Vignette */}
@@ -823,6 +878,39 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <kbd className="w-5 h-5 flex items-center justify-center rounded bg-white/10 border border-white/20 text-cyan-300 font-bold text-[9px] sm:text-[10px] shadow-sm">R</kbd>
                   <span className="text-slate-200">for restart</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Vertical Minimal Health Indicator (Visible ONLY when Astronaut steps out on Mars) */}
+          {isAtMars && playerMode === 'ASTRONAUT' && (
+            <div className="flex flex-col items-center mb-1.5 sm:mb-2 select-none pointer-events-none animate-in fade-in duration-300">
+              <div className={`text-[8px] sm:text-[9px] font-mono font-bold mb-0.5 leading-none ${astronautHealth > 50 ? 'text-cyan-300' : astronautHealth > 25 ? 'text-amber-400' : 'text-red-400 animate-pulse'}`}>
+                {astronautHealth}%
+              </div>
+              <div className="flex items-center justify-center gap-1 h-14 sm:h-16">
+                {/* Vertical Capsule Pill Bar - Sleek & matching button palette */}
+                <div className="w-2 sm:w-2.5 h-full rounded-full border-[1.5px] border-slate-700/80 bg-black/50 backdrop-blur-md p-[1.5px] flex flex-col justify-end overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+                  <div
+                    className={`w-full rounded-full transition-all duration-300 ${astronautHealth > 50
+                      ? 'bg-gradient-to-t from-cyan-500 to-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.5)]'
+                      : astronautHealth > 25
+                        ? 'bg-gradient-to-t from-amber-500 to-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.5)]'
+                        : 'bg-gradient-to-t from-red-600 to-rose-400 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse'
+                      }`}
+                    style={{ height: `${astronautHealth}%` }}
+                  />
+                </div>
+
+                {/* Vertical HEALTH Letters - Subtle & Minimal */}
+                <div className="flex flex-col justify-between items-center h-full text-[6.5px] sm:text-[7.5px] font-mono font-bold text-slate-400 tracking-tighter leading-none select-none">
+                  <span>H</span>
+                  <span>E</span>
+                  <span>A</span>
+                  <span>L</span>
+                  <span>T</span>
+                  <span>H</span>
                 </div>
               </div>
             </div>
@@ -1041,6 +1129,7 @@ export default function App() {
             roverPosRef={marsRoverPosRef}
             keysRef={keysRef}
             rocketOnMars={isLanded && isAtMars}
+            onAstronautHit={handleAstronautDamage}
           />
         </Suspense>
       </Canvas>
