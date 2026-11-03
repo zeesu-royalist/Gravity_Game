@@ -724,23 +724,25 @@ export default function App() {
         <h1 className="text-xl sm:text-3xl md:text-4xl font-extrabold tracking-wider text-slate-100 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
           Z-SPACE
         </h1>
-        <div className="text-[10px] sm:text-sm text-slate-300 drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] leading-relaxed max-w-[170px] sm:max-w-xs">
+        <div className="text-[9px] sm:text-xs text-gray-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-relaxed max-w-[190px] sm:max-w-xs">
           <div className="flex items-center gap-1 flex-wrap">
             <span>Created by</span>
             <a
               href="https://zeesu-royalist.vercel.app"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-cyan-300 hover:text-cyan-100 underline decoration-cyan-400/50 hover:decoration-cyan-200 transition-colors pointer-events-auto font-semibold"
+              className="text-gray-300 hover:text-white no-underline transition-colors pointer-events-auto font-medium"
               title="Visit Zeesu Royalist"
             >
               Zeesu Royalist
             </a>
           </div>
-          <div className="text-[9px] sm:text-xs text-slate-400 mt-0.5">
+
+          <div className="text-[9px] sm:text-[11px] text-gray-300 mt-0.5 leading-normal">
             Target: {destination === 'MARS' ? 'Mars Cosmodrome' : destination === 'MOON' ? 'Luna Base Alpha' : 'Earth Cosmodrome'}
           </div>
-          <div className="text-[9px] sm:text-xs font-mono text-cyan-300 mt-0.5">
+
+          <div className="text-[9px] sm:text-[10px] font-mono text-gray-400 mt-0.5 leading-normal">
             Status: {isLanded ? 'Surface Touchdown' : isFlying ? (autopilot ? 'Autopilot Flight' : 'Manual Flight') : 'Ready for Launch'}
           </div>
         </div>
