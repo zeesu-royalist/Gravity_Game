@@ -19,31 +19,12 @@ const EARTH_LANDING_SITE = new THREE.Vector3(0, 0.2, 0);
 const MOON_APPROACH = new THREE.Vector3(MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y + 180, MOON_LANDING_SITE.z);
 const MARS_APPROACH = new THREE.Vector3(MARS_LANDING_SITE.x, MARS_TOUCHDOWN_Y + 240, MARS_LANDING_SITE.z);
 
-const PLANET_DESTS = [
+const DESTINATIONS = [
   { id: 'EARTH' as const, icon: '🌍', name: 'EARTH', base: 'Buran Pad', g: '1.0G', v: 'Stormchaser' },
   { id: 'MOON' as const, icon: '🌕', name: 'MOON', base: 'Luna Alpha', g: '0.17G', v: 'Lunar 4x4' },
   { id: 'MARS' as const, icon: '🔴', name: 'MARS', base: 'Ares Base', g: '0.38G', v: 'Martian 4x4' },
-];
-
-const LOCKED_DESTS = [
-  {
-    id: 'SPACE_STATION',
-    icon: '🛰️',
-    name: 'SPACE STATION',
-    base: 'Orbital Dock',
-    g: '0.0G',
-    v: 'EVA Pod',
-    price: 50,
-  },
-  {
-    id: 'SATURN',
-    icon: '🪐',
-    name: 'SATURN',
-    base: 'Titan Rings',
-    g: '1.06G',
-    v: 'Hover Probe',
-    price: 70,
-  },
+  { id: 'SPACE_STATION' as const, icon: '🛰️', name: 'SPACE STATION', base: 'Orbital Dock', g: '0.0G', v: 'EVA Pod', price: 50 },
+  { id: 'SATURN' as const, icon: '🪐', name: 'SATURN', base: 'Titan Rings', g: '1.06G', v: 'Hover Probe', price: 70 },
 ];
 
 function UniversalThirdPersonCamera({
@@ -827,56 +808,42 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-2 gap-1.5 sm:gap-2.5">
-              {/* Unlocked Available Destinations */}
-              {PLANET_DESTS.filter((d) => d.id !== currentWorld).map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => executeLaunch(d.id)}
-                  className="group flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border border-slate-700/80 hover:border-cyan-400 bg-slate-900/60 hover:bg-slate-900 transition-all text-left cursor-pointer active:scale-95"
-                >
-                  <div>
-                    <div className="text-base sm:text-2xl">{d.icon}</div>
-                    <div className="text-[10px] sm:text-xs font-bold text-white mt-0.5">{d.name}</div>
-                    <div className="text-[7.5px] sm:text-[9px] text-slate-400 font-mono mb-1">{d.base}</div>
-                    <div className="text-[7px] sm:text-[8.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
-                      <div className="flex justify-between"><span>GRAV:</span><span className="text-emerald-400">{d.g}</span></div>
-                      <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{d.v}</span></div>
+              {DESTINATIONS.filter((d) => d.id !== currentWorld).map((d) => {
+                const isLocked = 'price' in d && d.price;
+                return (
+                  <button
+                    key={d.id}
+                    onClick={() => isLocked ? setLockedPaymentDest(d as any) : executeLaunch(d.id as any)}
+                    className={`group relative flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border text-left cursor-pointer active:scale-95 transition-all ${
+                      isLocked
+                        ? 'border-amber-500/40 hover:border-amber-400 bg-gradient-to-b from-amber-950/25 to-slate-900/90 hover:bg-amber-950/35 shadow-[0_0_10px_rgba(245,158,11,0.08)]'
+                        : 'border-slate-700/80 hover:border-cyan-400 bg-slate-900/60 hover:bg-slate-900'
+                    }`}
+                  >
+                    {isLocked && (
+                      <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-[7px] sm:text-[8px] font-mono font-bold text-amber-300">
+                        <span>🔒</span><span>₹{d.price}</span>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-base sm:text-2xl">{d.icon}</div>
+                      <div className={`text-[10px] sm:text-xs font-bold text-white mt-0.5 ${isLocked ? 'group-hover:text-amber-200' : ''}`}>{d.name}</div>
+                      <div className={`text-[7.5px] sm:text-[9px] font-mono mb-1 ${isLocked ? 'text-amber-300/80' : 'text-slate-400'}`}>{d.base}</div>
+                      <div className="text-[7px] sm:text-[8.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
+                        <div className="flex justify-between"><span>GRAV:</span><span className={isLocked ? 'text-amber-400' : 'text-emerald-400'}>{d.g}</span></div>
+                        <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{d.v}</span></div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="w-full py-1 rounded border border-cyan-500/40 bg-cyan-950/70 group-hover:bg-cyan-500 group-hover:text-black text-cyan-300 text-center font-mono font-bold text-[8px] sm:text-[10px] uppercase transition">
-                    Launch →
-                  </div>
-                </button>
-              ))}
-
-              {/* Locked Destinations: Space Station 🛰️ & Saturn 🪐 */}
-              {LOCKED_DESTS.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => setLockedPaymentDest(d)}
-                  className="group relative flex flex-col justify-between p-2 sm:p-2.5 rounded-lg border border-amber-500/40 hover:border-amber-400 bg-gradient-to-b from-amber-950/25 to-slate-900/90 hover:bg-amber-950/35 transition-all text-left cursor-pointer active:scale-95 shadow-[0_0_10px_rgba(245,158,11,0.08)]"
-                >
-                  {/* Top-Right Price Lock Pill */}
-                  <div className="absolute top-1.5 right-1.5 flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-[7px] sm:text-[8px] font-mono font-bold text-amber-300">
-                    <span>🔒</span>
-                    <span>₹{d.price}</span>
-                  </div>
-
-                  <div>
-                    <div className="text-base sm:text-2xl">{d.icon}</div>
-                    <div className="text-[10px] sm:text-xs font-bold text-white group-hover:text-amber-200 mt-0.5">{d.name}</div>
-                    <div className="text-[7.5px] sm:text-[9px] text-amber-300/80 font-mono mb-1">{d.base}</div>
-                    <div className="text-[7px] sm:text-[8.5px] font-mono text-slate-400 space-y-0.5 border-t border-white/10 pt-1 mb-2">
-                      <div className="flex justify-between"><span>GRAV:</span><span className="text-amber-400">{d.g}</span></div>
-                      <div className="flex justify-between"><span>ASSET:</span><span className="text-amber-300">{d.v}</span></div>
+                    <div className={`w-full py-1 rounded border text-center font-mono font-bold transition flex items-center justify-center gap-1 ${
+                      isLocked
+                        ? 'border-amber-500/60 bg-amber-500/20 group-hover:bg-amber-500 group-hover:text-black text-amber-300 text-[7.5px] sm:text-[9.5px]'
+                        : 'border-cyan-500/40 bg-cyan-950/70 group-hover:bg-cyan-500 group-hover:text-black text-cyan-300 text-[8px] sm:text-[10px] uppercase'
+                    }`}>
+                      {isLocked ? `🔒 ₹${d.price} to unlock` : 'Launch →'}
                     </div>
-                  </div>
-                  <div className="w-full py-1 rounded border border-amber-500/60 bg-amber-500/20 group-hover:bg-amber-500 group-hover:text-black text-amber-300 text-center font-mono font-bold text-[7.5px] sm:text-[9.5px] uppercase transition flex items-center justify-center gap-1">
-                    <span>🔒</span>
-                    <span>₹{d.price} to unlock</span>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mt-2 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] sm:text-[9px] text-slate-500 font-mono">
@@ -928,10 +895,9 @@ export default function App() {
             <div className="p-3.5 sm:p-4 flex flex-col items-center w-full">
               <div className="relative p-2 bg-white rounded-xl shadow-lg border-2 border-cyan-400/60 max-w-[210px]">
                 {/* Scanner Target Corners */}
-                <div className="absolute -top-1.5 -left-1.5 w-4 h-4 border-t-[3px] border-l-[3px] border-cyan-400"></div>
-                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 border-t-[3px] border-r-[3px] border-cyan-400"></div>
-                <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 border-b-[3px] border-l-[3px] border-cyan-400"></div>
-                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 border-b-[3px] border-r-[3px] border-cyan-400"></div>
+                {['-top-1.5 -left-1.5 border-t-[3px] border-l-[3px]', '-top-1.5 -right-1.5 border-t-[3px] border-r-[3px]', '-bottom-1.5 -left-1.5 border-b-[3px] border-l-[3px]', '-bottom-1.5 -right-1.5 border-b-[3px] border-r-[3px]'].map((c, i) => (
+                  <div key={i} className={`absolute w-4 h-4 border-cyan-400 ${c}`} />
+                ))}
 
                 {/* Animated Scanner Laser Beam */}
                 <div className="absolute inset-x-2 top-0 h-0.5 bg-cyan-400 shadow-[0_0_10px_#22d3ee] animate-pulse pointer-events-none z-10"></div>
