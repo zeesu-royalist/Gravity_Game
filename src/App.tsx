@@ -827,10 +827,25 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. BOTTOM-LEFT: Vertical Navigation Buttons & Flight Controls Info (Matching Mockup 100%) */}
+      {/* 3. BOTTOM-LEFT: Shoot Weapon, Vertical Navigation Buttons & Flight Controls Info */}
       <div className="absolute bottom-3 sm:bottom-6 left-3 sm:left-6 z-20 flex flex-col gap-2 sm:gap-2.5 select-none pointer-events-auto">
-        {/* Vertical Buttons: Up / Down */}
-        <div className="flex flex-col gap-1.5 sm:gap-2">
+        {/* Vertical Buttons: Shoot, Up, Down */}
+        <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+          {/* Circle: Shoot Gun (Positioned directly above Up Button) */}
+          <button
+            {...qProps}
+            className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${isAtMars && playerMode === 'ASTRONAUT'
+              ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
+              : 'border-slate-700/80 hover:border-cyan-400'
+              }`}
+            aria-label="Shoot Weapon"
+            title="Shoot Weapon [Q]"
+          >
+            <span className="text-[8.5px] sm:text-[10px] font-bold tracking-tight uppercase leading-none">
+              SHOOT
+            </span>
+          </button>
+
           {/* Up Button */}
           <button
             {...dpadProps('KeyW')}
@@ -1018,28 +1033,13 @@ export default function App() {
                 EXIT
               </span>
             </button>
-
-            {/* Circle: Shoot Gun */}
-            <button
-              {...qProps}
-              className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 sm:border-[2.5px] bg-black/40 hover:bg-black/60 active:scale-95 text-slate-100 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] flex items-center justify-center cursor-pointer transition-all touch-none select-none p-1 leading-none ${isAtMars && playerMode === 'ASTRONAUT'
-                ? 'border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.6)] animate-pulse'
-                : 'border-slate-700/80 hover:border-cyan-400'
-                }`}
-              aria-label="Shoot Weapon"
-              title="Shoot Weapon [Q]"
-            >
-              <span className="text-[8.5px] sm:text-[10px] font-bold tracking-tight uppercase leading-none">
-                SHOOT
-              </span>
-            </button>
           </div>
 
-          {/* Small Circle: Autopilot positioned to the left between E & Q (Visible when near Moon, Mars, or Earth) */}
+          {/* Small Circle: Autopilot positioned to the left of the action buttons (Visible when near Moon, Mars, or Earth) */}
           {showAutopilotBtn && (
             <button
               {...actionProps(() => setAutopilot((p) => !p))}
-              className={`absolute right-full mr-2.5 sm:mr-3 bottom-[30px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none animate-in fade-in zoom-in-75 duration-300 ${autopilot
+              className={`absolute right-full mr-2.5 sm:mr-3 bottom-[35px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none animate-in fade-in zoom-in-75 duration-300 ${autopilot
                 ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
                 : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
                 }`}
