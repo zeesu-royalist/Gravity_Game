@@ -1,6 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { getCurvedEarthY } from './RealisticLandscape';
 
@@ -80,20 +79,14 @@ export const SCIENTISTS_DATA: ScientistData[] = [
   },
 ];
 
-export function SingleScientist({ data, astronautPosRef }: { data: ScientistData; astronautPosRef: React.MutableRefObject<THREE.Vector3> }) {
+export function SingleScientist({ data }: { data: ScientistData; astronautPosRef?: React.MutableRefObject<THREE.Vector3> }) {
   const headRef = useRef<THREE.Group>(null);
   const chestRef = useRef<THREE.Group>(null);
-  const [isNearby, setIsNearby] = useState(false);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime() + data.position[0];
     if (headRef.current) headRef.current.rotation.y = Math.sin(t * 0.8) * 0.15;
     if (chestRef.current) chestRef.current.position.y = 0.95 + Math.sin(t * 1.5) * 0.015;
-
-    // Name tag appears strictly when astronaut walks close (< 3.2m), hidden otherwise
-    const dist = astronautPosRef.current.distanceTo(new THREE.Vector3(...data.position));
-    if (dist < 3.2 && !isNearby) setIsNearby(true);
-    else if (dist >= 3.8 && isNearby) setIsNearby(false);
   });
 
   return (
@@ -142,18 +135,6 @@ export function SingleScientist({ data, astronautPosRef }: { data: ScientistData
             </mesh>
           ))}
         </group>
-      )}
-
-      {/* Nearby Proximity Tag */}
-      {isNearby && (
-        <Html position={[0, 2.15, 0]} center distanceFactor={14}>
-          <div className="bg-black/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-cyan-400/60 text-white font-sans text-xs shadow-2xl whitespace-nowrap pointer-events-none text-center">
-            <div className="font-extrabold text-cyan-400 text-[11px] flex items-center justify-center gap-1">
-              <span>👨‍🔬</span><span>{data.name}</span><span className="text-[9px] text-gray-400 font-normal">[{data.role}]</span>
-            </div>
-            <div className="text-[10px] text-amber-200 font-mono mt-0.5">"{data.quote}"</div>
-          </div>
-        </Html>
       )}
     </group>
   );

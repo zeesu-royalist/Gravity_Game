@@ -11,6 +11,7 @@ interface AstronautProps {
   visible: boolean;
   hasWeapon?: boolean;
   isShooting?: boolean;
+  keysRef?: React.MutableRefObject<{ [key: string]: boolean }>;
 }
 
 export const Astronaut: React.FC<AstronautProps> = ({
@@ -22,12 +23,14 @@ export const Astronaut: React.FC<AstronautProps> = ({
   visible,
   hasWeapon = false,
   isShooting = false,
+  keysRef,
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const leftLegRef = useRef<THREE.Group>(null);
   const rightLegRef = useRef<THREE.Group>(null);
   const leftArmRef = useRef<THREE.Group>(null);
   const rightArmRef = useRef<THREE.Group>(null);
+  const muzzleRef = useRef<THREE.Mesh>(null);
   const lastPos = useRef(new THREE.Vector3());
 
   // Walking and lunar hop animation
@@ -47,10 +50,15 @@ export const Astronaut: React.FC<AstronautProps> = ({
     const isActuallyMoving = (distMoved > 0.005 || isMoving) && distMoved > 0.0005;
 
     const time = state.clock.getElapsedTime() * 8;
+    const isShootingActive = isShooting || !!keysRef?.current?.['KeyQ'];
+
+    if (muzzleRef.current) {
+      muzzleRef.current.visible = isShootingActive;
+    }
 
     if (hasWeapon) {
       // Tactical Space Marine Combat Rifle Posture
-      const recoil = isShooting ? 0.18 : 0;
+      const recoil = isShootingActive ? 0.18 : 0;
       if (rightArmRef.current) rightArmRef.current.rotation.set(-Math.PI / 2.3 - recoil, 0, 0);
       if (leftArmRef.current) leftArmRef.current.rotation.set(-Math.PI / 2.6 - recoil * 0.5, 0.35, -0.28);
       if (isActuallyMoving && !isJumping) {
@@ -204,12 +212,10 @@ export const Astronaut: React.FC<AstronautProps> = ({
               <cylinderGeometry args={[0.024, 0.03, 0.16, 8]} />
               <meshStandardMaterial color="#334155" metalness={0.9} />
             </mesh>
-            {isShooting && (
-              <mesh position={[0, 0, 0.44]}>
-                <sphereGeometry args={[0.07, 8, 8]} />
-                <meshBasicMaterial color="#38bdf8" />
-              </mesh>
-            )}
+            <mesh ref={muzzleRef} position={[0, 0, 0.44]} visible={false}>
+              <sphereGeometry args={[0.07, 8, 8]} />
+              <meshBasicMaterial color="#38bdf8" />
+            </mesh>
           </group>
         )}
       </group>

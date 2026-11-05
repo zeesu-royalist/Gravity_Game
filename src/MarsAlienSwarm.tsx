@@ -4,27 +4,16 @@ import { useGLTF, useAnimations } from '@react-three/drei';
 import * as THREE from 'three';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
+import { getMarsSurfaceElevation } from './MarsExploration';
 
 const MARS_TOUCHDOWN_Y = MARS_POSITION.y + MARS_RADIUS + 0.2;
 const MODEL_URL = '/models/gastaroid_queen.glb';
 const MAX_BULLETS = 12;
 const MAX_SPARKS = 12;
 const BULLET_SPEED = 75.0;
-const BULLET_MAX_DIST = 22.0;
+const BULLET_MAX_DIST = 45.0;
 
 useGLTF.preload(MODEL_URL);
-
-// Mars terrain elevation conforming
-function getMarsElevation(x: number, z: number): number {
-  const dx = x - MARS_POSITION.x, dz = z - MARS_POSITION.z, dSq = dx * dx + dz * dz, r = MARS_RADIUS;
-  if (dSq <= 900) return MARS_TOUCHDOWN_Y;
-  if (dSq < r * r) {
-    const d = Math.sqrt(dSq);
-    const noise = d < 380 ? (Math.sin(dx * 0.03) * 1.8 + Math.cos(dz * 0.03) * 1.8) * THREE.MathUtils.clamp((d - 30) / 25, 0, 1) : 0;
-    return MARS_POSITION.y + Math.sqrt(r * r - dSq) + 0.25 + noise;
-  }
-  return MARS_POSITION.y;
-}
 
 // Ultra-lightweight Web Audio Synthesizer (Zero frame drop)
 let audioCtx: AudioContext | null = null, lastScreech = 0;
@@ -148,6 +137,7 @@ export interface MarsAlienSwarmProps {
   roverPos: THREE.Vector3;
   playerMode: 'ROCKET' | 'ASTRONAUT' | 'ROVER';
   isShooting?: boolean;
+  keysRef?: React.MutableRefObject<{ [key: string]: boolean }>;
   active: boolean;
   onThreatChange?: (threat: { count: number; nearestDist: number; isAttacking: boolean; isFleeing?: boolean; kills?: number; allDead?: boolean }) => void;
   onAstronautHit?: (damage: number) => void;
@@ -281,6 +271,7 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
   roverPos,
   playerMode,
   isShooting = false,
+  keysRef,
   active,
   onThreatChange,
   onAstronautHit,
@@ -373,7 +364,7 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
       const off = spawns[idx % spawns.length];
       const sx = MARS_POSITION.x + off.x;
       const sz = MARS_POSITION.z + off.z;
-      al.pos.set(sx, getMarsElevation(sx, sz), sz);
+      al.pos.set(sx, getMarsSurfaceElevation(sx, sz), sz);
     });
     bulletsRef.current.forEach((b) => { b.active = false; });
     sparksRef.current.forEach((s) => { s.active = false; });
@@ -398,9 +389,9 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
     let minDistance = 9999, anyAttacking = false, anyFleeing = false;
     let aliveCount = 0;
 
-    // 1. Plasma Rifle Shooting Trigger (Key 'Q') - Only shoots while hostile aliens are active
-    const hasAliveEnemies = alienList.some((a) => a.state !== 'DEAD');
-    if (isShooting && playerMode === 'ASTRONAUT' && hasAliveEnemies) {
+    // 1. Plasma Rifle Shooting Trigger (Key 'Q' / Touch Button)
+    const isShootingActive = (keysRef?.current?.['KeyQ'] || isShooting) && playerMode === 'ASTRONAUT';
+    if (isShootingActive) {
       const now = performance.now();
       if (now - lastShoot.current > 180) { // ~5.5 rounds/sec
         lastShoot.current = now;
@@ -413,10 +404,10 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
 
         _fireDir.set(0, 0, 1).applyQuaternion(q).normalize();
 
-        // Target assist within short combat range (<= 22m) - Zero GC
+        // Target assist within combat range (<= 45m) - Zero GC
         let bestTargetX = 0, bestTargetY = 0, bestTargetZ = 0;
         let hasTarget = false;
-        let bestAngle = 0.45;
+        let bestAngle = 0.55;
 
         for (let i = 0; i < alienList.length; i++) {
           const al = alienList[i];
@@ -425,7 +416,7 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
           const toY = (al.pos.y + 1.6) - originY;
           const toZ = al.pos.z - originZ;
           const distSq = toX * toX + toY * toY + toZ * toZ;
-          if (distSq < 484.0) { // 22m range
+          if (distSq < 2025.0) { // 45m range
             const invDist = 1 / Math.sqrt(distSq);
             _targetDir.set(toX * invDist, toY * invDist, toZ * invDist);
             const angle = _fireDir.angleTo(_targetDir);
@@ -474,7 +465,7 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
         const dz = b.pos.z - al.pos.z;
         const distSq = dx * dx + dy * dy + dz * dz;
 
-        if (distSq < 5.76) { // 2.4m radius
+        if (distSq < 10.24) { // 3.2m radius for solid hit confirmation on large queen
           hit = true;
           al.health = Math.max(0, al.health - 20); // Exactly 5 hits to kill (100 -> 80 -> 60 -> 40 -> 20 -> 0)
           al.flinchTimer = 0.2;
@@ -492,18 +483,18 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
             al.vel.set(0, 0, 0);
             playAlienDeathRoar();
 
-            // If the last living queen was just defeated, immediately halt firing loop
+            // If the last living queen was just defeated, clear key
             const stillAlive = alienList.some((x) => x.state !== 'DEAD');
-            if (!stillAlive) {
-              lastShoot.current = performance.now() + 1000;
+            if (!stillAlive && keysRef?.current) {
+              keysRef.current['KeyQ'] = false;
             }
           }
           break;
         }
       }
 
-      // Bullets expire after 22 meters ("thodi dur tak hi jaye") or upon hit / terrain contact
-      if (hit || b.dist > BULLET_MAX_DIST || b.pos.y < getMarsElevation(b.pos.x, b.pos.z)) {
+      // Bullets expire after 45 meters or upon hit / terrain contact
+      if (hit || b.dist > BULLET_MAX_DIST || b.pos.y < getMarsSurfaceElevation(b.pos.x, b.pos.z) - 0.25) {
         b.active = false;
       }
     }
@@ -612,9 +603,9 @@ export const MarsAlienSwarm: React.FC<MarsAlienSwarmProps> = ({
         a.roll = THREE.MathUtils.clamp(-diff * 0.4, -0.25, 0.25);
       }
 
-      const elev = getMarsElevation(a.pos.x, a.pos.z);
+      const elev = getMarsSurfaceElevation(a.pos.x, a.pos.z);
       a.pos.y = elev;
-      const slope = (getMarsElevation(a.pos.x + dirX * 1.5, a.pos.z + dirZ * 1.5) - elev) / 1.5;
+      const slope = (getMarsSurfaceElevation(a.pos.x + dirX * 1.5, a.pos.z + dirZ * 1.5) - elev) / 1.5;
       a.pitch = -slope * 0.45 + (a.state === 'ATTACKING' ? 0.2 + Math.sin(a.attackTimer * 4) * 0.08 : 0.1);
     }
 

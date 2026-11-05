@@ -9,7 +9,7 @@ import { MARS_POSITION, MARS_RADIUS } from './SpaceEnvironment';
 export const MARS_TOUCHDOWN_Y = MARS_POSITION.y + MARS_RADIUS + 0.2;
 export const MARS_LANDING_SITE = new THREE.Vector3(MARS_POSITION.x, MARS_TOUCHDOWN_Y, MARS_POSITION.z);
 
-function getMarsSurfaceElevation(x: number, z: number): number {
+export function getMarsSurfaceElevation(x: number, z: number): number {
   const dx = x - MARS_POSITION.x, dz = z - MARS_POSITION.z;
   const dSq = dx * dx + dz * dz, r = MARS_RADIUS;
   if (dSq <= 900) return MARS_TOUCHDOWN_Y; // 30m flat landing pad
@@ -254,7 +254,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         isJumping={isJumping.current}
         visible={playerMode === 'ASTRONAUT'}
         hasWeapon={true}
-        isShooting={playerMode === 'ASTRONAUT' && !!keysRef.current['KeyQ']}
+        keysRef={keysRef}
       />
 
       {/* 6. Realistic 3D Mars Exploration Rover Model */}
@@ -272,7 +272,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         astronautQuat={astronautQuat.current}
         roverPos={roverPosRef.current}
         playerMode={playerMode}
-        isShooting={playerMode === 'ASTRONAUT' && !!keysRef.current['KeyQ']}
+        keysRef={keysRef}
         active={isLanded && (playerMode === 'ASTRONAUT' || playerMode === 'ROVER')}
         onAstronautHit={onAstronautHit}
         onThreatChange={(threat) => {

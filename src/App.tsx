@@ -28,16 +28,26 @@ const DESTINATIONS = [
 ];
 
 function UniversalThirdPersonCamera({
-  playerMode, rocketPos, astronautPos, roverPos, resetCount,
+  playerMode,
+  rocketPos,
+  astronautPos,
+  roverPos,
+  isFlying,
+  keysRef,
+  resetCount,
 }: {
   playerMode: 'ROCKET' | 'ASTRONAUT' | 'ROVER';
   rocketPos: THREE.Vector3;
   astronautPos: THREE.Vector3;
   roverPos: THREE.Vector3;
+  isFlying?: boolean;
+  keysRef?: React.MutableRefObject<{ [key: string]: boolean }>;
   resetCount: number;
 }) {
   const controlsRef = useRef<any>(null);
   const prevTarget = useRef(new THREE.Vector3(0, 13.7, 0));
+  const prevMode = useRef(playerMode);
+  const isUserDragging = useRef(false);
   const { camera } = useThree();
 
   useEffect(() => {
@@ -49,17 +59,126 @@ function UniversalThirdPersonCamera({
     }
   }, [resetCount, camera]);
 
-  useFrame(() => {
+  useEffect(() => {
     const ctrl = controlsRef.current;
     if (!ctrl) return;
+    const onStart = () => { isUserDragging.current = true; };
+    const onEnd = () => { isUserDragging.current = false; };
+    ctrl.addEventListener('start', onStart);
+    ctrl.addEventListener('end', onEnd);
+    return () => {
+      ctrl.removeEventListener('start', onStart);
+      ctrl.removeEventListener('end', onEnd);
+    };
+  }, []);
+
+  useFrame((_, delta) => {
+    const ctrl = controlsRef.current;
+    if (!ctrl) return;
+
+    // 1. Target calculation based on mode
     const target = playerMode === 'ROCKET'
       ? new THREE.Vector3(rocketPos.x, Math.max(0.2, rocketPos.y) + 13.5, rocketPos.z)
-      : (playerMode === 'ASTRONAUT' ? astronautPos : roverPos).clone().add(new THREE.Vector3(0, 1.2, 0));
+      : (playerMode === 'ASTRONAUT' ? astronautPos : roverPos).clone().add(new THREE.Vector3(0, playerMode === 'ASTRONAUT' ? 1.2 : 1.3, 0));
 
-    camera.position.add(target.clone().sub(prevTarget.current));
-    if (rocketPos.y < 200 && camera.position.y < 1.0) camera.position.y = 1.0;
+    // 2. Mode transition: automatically position camera behind entity at proper distance
+    if (prevMode.current !== playerMode) {
+      prevMode.current = playerMode;
+      if (playerMode === 'ASTRONAUT') {
+        // Place camera ~10m behind the astronaut (matching user reference image)
+        camera.position.set(target.x, target.y + 2.0, target.z - 10.0);
+      } else if (playerMode === 'ROVER') {
+        // Place camera ~14m behind the rover / car for a clear driving view
+        camera.position.set(target.x, target.y + 3.2, target.z - 14.0);
+      } else {
+        // Rocket mode
+        if (isFlying) {
+          camera.position.set(target.x, target.y + 6.0, target.z + 36.0);
+        } else {
+          // Relative to rocket landing target (works on Earth, Moon, and Mars)
+          camera.position.set(target.x, target.y + 2.5, target.z + 48.0);
+        }
+      }
+      prevTarget.current.copy(target);
+      ctrl.target.copy(target);
+      ctrl.update();
+      return;
+    }
+
+    // 3. Move camera along with target movement
+    const deltaPos = target.clone().sub(prevTarget.current);
+    camera.position.add(deltaPos);
     ctrl.target.copy(target);
     prevTarget.current.copy(target);
+
+    // 4. Handle smooth turning and alignment when user is NOT actively dragging
+    if (!isUserDragging.current) {
+      const keys = keysRef?.current || {};
+      const isTurnLeft = !!(keys['KeyA'] || keys['ArrowLeft']);
+      const isTurnRight = !!(keys['KeyD'] || keys['ArrowRight']);
+      const isMoveForward = !!(keys['KeyW'] || keys['ArrowUp']);
+
+      const horizMove = new THREE.Vector3(deltaPos.x, 0, deltaPos.z);
+      const isEntityMoving = (playerMode === 'ROVER' || playerMode === 'ASTRONAUT') && horizMove.lengthSq() > 0.0001;
+
+      if (isEntityMoving) {
+        // Smooth cinematic chase camera for Astronaut & Rover (GTA style)
+        // Camera smoothly glides behind the movement trajectory with natural inertia
+        const desiredBack = horizMove.normalize().negate();
+        const offset = camera.position.clone().sub(target);
+        const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
+        let angleDiff = Math.atan2(desiredBack.x, desiredBack.z) - Math.atan2(currentBack.x, currentBack.z);
+        if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        const assistRate = playerMode === 'ASTRONAUT' ? 0.6 : 0.45;
+        let steerAssist = 0;
+        if (isTurnLeft) steerAssist += assistRate * delta;
+        if (isTurnRight) steerAssist -= assistRate * delta;
+
+        const alignSpeed = Math.min(1.0, delta * (playerMode === 'ASTRONAUT' ? 2.6 : 2.2));
+        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed + steerAssist);
+        camera.position.copy(target).add(offset);
+      } else {
+        // Smooth pivot turning when stationary (or for Rocket)
+        const turnRate = playerMode === 'ASTRONAUT' ? 1.2 : playerMode === 'ROVER' ? 0.75 : (rocketPos.y > 3500 ? 1.6 : 1.2);
+        let rotDelta = 0;
+        if (isTurnLeft) rotDelta += turnRate * delta;
+        if (isTurnRight) rotDelta -= turnRate * delta;
+
+        if (rotDelta !== 0) {
+          const offset = camera.position.clone().sub(target);
+          offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotDelta);
+          camera.position.copy(target).add(offset);
+        } else if (isMoveForward || (playerMode === 'ROCKET' && isFlying)) {
+          // When moving forward or cruising (Rocket), smoothly align behind movement trajectory
+          if (horizMove.lengthSq() > 0.00005) {
+            const desiredBack = horizMove.normalize().negate();
+            const offset = camera.position.clone().sub(target);
+            const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
+            let angleDiff = Math.atan2(desiredBack.x, desiredBack.z) - Math.atan2(currentBack.x, currentBack.z);
+            if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            const alignSpeed = Math.min(1.0, delta * 3.5);
+            offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed);
+            camera.position.copy(target).add(offset);
+          }
+        }
+      }
+    }
+
+    // Ground clamp: prevents camera clipping into terrain or underground on Earth, Moon, Mars
+    if (playerMode === 'ASTRONAUT') {
+      const minCamY = astronautPos.y + 0.35;
+      if (camera.position.y < minCamY) camera.position.y = minCamY;
+    } else if (playerMode === 'ROVER') {
+      const minCamY = roverPos.y + 0.45;
+      if (camera.position.y < minCamY) camera.position.y = minCamY;
+    } else if (playerMode === 'ROCKET' && !isFlying) {
+      const minCamY = rocketPos.y + 1.2;
+      if (camera.position.y < minCamY) camera.position.y = minCamY;
+    }
+
     ctrl.update();
   });
 
@@ -69,11 +188,12 @@ function UniversalThirdPersonCamera({
       makeDefault
       target={[0, 13.7, 0]}
       enablePan={false}
-      minDistance={playerMode === 'ASTRONAUT' ? 2.5 : playerMode === 'ROVER' ? 4.5 : 7}
-      maxDistance={playerMode === 'ASTRONAUT' ? 16 : playerMode === 'ROVER' ? 26 : 75}
+      minDistance={playerMode === 'ASTRONAUT' ? 2.5 : playerMode === 'ROVER' ? 5.0 : 7}
+      maxDistance={playerMode === 'ASTRONAUT' ? 24 : playerMode === 'ROVER' ? 38 : 75}
+      maxPolarAngle={playerMode === 'ROCKET' && isFlying ? Math.PI : Math.PI / 2 + 0.04}
       dampingFactor={0.08}
       rotateSpeed={0.85}
-      zoomSpeed={1.2}
+      zoomSpeed={1.0}
     />
   );
 }
@@ -447,13 +567,7 @@ export default function App() {
       if (e.code === 'KeyE') handleInteraction();
       if (playerModeRef.current === 'ROCKET' && (e.code === 'KeyF' || (e.code === 'Space' && !isFlyingRef.current))) handleLaunch();
       if (playerModeRef.current === 'ROCKET' && e.code === 'KeyT') {
-        const nearLimit = destinationRef.current === 'MARS' ? 9000 : 7000;
-        const currentDist = destinationRef.current === 'MARS'
-          ? Math.max(0, posRef.current.distanceTo(MARS_POSITION) - MARS_RADIUS)
-          : destinationRef.current === 'MOON'
-            ? Math.max(0, posRef.current.distanceTo(MOON_POSITION) - MOON_RADIUS)
-            : posRef.current.distanceTo(EARTH_LANDING_SITE);
-        if (autopilotRef.current || (isFlyingRef.current && currentDist <= nearLimit)) {
+        if (autopilotRef.current || isFlyingRef.current) {
           setAutopilot((p) => !p);
         }
       }
@@ -1118,9 +1232,15 @@ export default function App() {
 
           {/* Small Circle: Autopilot positioned to the left of the action buttons */}
           <button
-            {...actionProps(() => setAutopilot((p) => !p))}
+            {...actionProps(() => {
+              if (isFlying || autopilot) {
+                setAutopilot((p) => !p);
+              }
+            })}
             className={`absolute right-full mr-2.5 sm:mr-3 bottom-[35px] sm:bottom-[40px] w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 bg-black/40 hover:bg-black/60 active:scale-95 backdrop-blur-md flex flex-col items-center justify-center cursor-pointer transition-all touch-none select-none shadow-[0_4px_16px_rgba(0,0,0,0.6)] p-0.5 leading-none ${autopilot
-              ? 'border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)] animate-pulse'
+              ? 'border-emerald-400 text-emerald-300 bg-emerald-500/25 shadow-[0_0_16px_rgba(52,211,153,0.85)]'
+              : (isFlying && playerMode === 'ROCKET')
+              ? 'border-cyan-400 text-cyan-300 shadow-[0_0_14px_rgba(6,182,212,0.8)] animate-pulse'
               : 'border-slate-700/80 text-slate-300 hover:border-cyan-400'
               }`}
             title="Autopilot Cruise [T]"
@@ -1188,6 +1308,8 @@ export default function App() {
           rocketPos={posRef.current}
           astronautPos={isAtMars ? marsAstroPosRef.current : isAtMoon ? moonAstroPosRef.current : earthAstroPosRef.current}
           roverPos={isAtMars ? marsRoverPosRef.current : isAtMoon ? moonRoverPosRef.current : earthCarPosRef.current}
+          isFlying={isFlying}
+          keysRef={keysRef}
           resetCount={resetCount}
         />
 
