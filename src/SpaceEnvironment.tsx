@@ -342,6 +342,10 @@ function DeepSpaceStarfield({ opacity }: { opacity: number }) {
 // ------------------------------------------------------------------
 // 4. Main SpaceEnvironment Component
 // ------------------------------------------------------------------
+let _cachedMoonTex: THREE.CanvasTexture | null = null;
+let _cachedMarsTex: THREE.CanvasTexture | null = null;
+let _cachedEarthTex: THREE.CanvasTexture | null = null;
+
 interface SpaceProps {
   altitude: number;
   rocketPos: THREE.Vector3;
@@ -351,9 +355,18 @@ export const SpaceEnvironment: React.FC<SpaceProps> = ({ altitude, rocketPos }) 
   const moonRef = useRef<THREE.Group>(null);
   const marsRef = useRef<THREE.Group>(null);
 
-  const moonTexture = useMemo(() => createMoonTextures(), []);
-  const marsTexture = useMemo(() => createMarsTexture(), []);
-  const earthTexture = useMemo(() => createEarthGlobeTexture(), []);
+  const moonTexture = useMemo(() => {
+    if (!_cachedMoonTex) _cachedMoonTex = createMoonTextures();
+    return _cachedMoonTex;
+  }, []);
+  const marsTexture = useMemo(() => {
+    if (!_cachedMarsTex) _cachedMarsTex = createMarsTexture();
+    return _cachedMarsTex;
+  }, []);
+  const earthTexture = useMemo(() => {
+    if (!_cachedEarthTex) _cachedEarthTex = createEarthGlobeTexture();
+    return _cachedEarthTex;
+  }, []);
 
   // Space factor: 0.0 at Earth surface -> 1.0 in deep space (4500m+)
   const spaceFactor = useMemo(() => {
@@ -508,31 +521,29 @@ export const SpaceEnvironment: React.FC<SpaceProps> = ({ altitude, rocketPos }) 
         </group>
       )}
 
-      {/* 4. Planet Earth Globe (Seen looking back from Orbit / Space) */}
-      {spaceFactor > 0.35 && (
-        <group position={[0, -1800, 0]}>
-          {/* Main Earth Sphere */}
-          <mesh>
-            <sphereGeometry args={[1800, 64, 64]} />
-            <meshStandardMaterial
-              map={earthTexture}
-              roughness={0.8}
-              metalness={0.1}
-            />
-          </mesh>
+      {/* 4. Planet Earth Globe (Seen looking back from Orbit / Space - Optimized 48x48) */}
+      <group position={[0, -1800, 0]}>
+        {/* Main Earth Sphere */}
+        <mesh frustumCulled>
+          <sphereGeometry args={[1800, 48, 48]} />
+          <meshStandardMaterial
+            map={earthTexture}
+            roughness={0.8}
+            metalness={0.1}
+          />
+        </mesh>
 
-          {/* Luminous Blue Atmospheric Limb Glow Ring */}
-          <mesh scale={[1.02, 1.02, 1.02]}>
-            <sphereGeometry args={[1800, 32, 32]} />
-            <meshBasicMaterial
-              color="#0284c7"
-              side={THREE.BackSide}
-              transparent
-              opacity={0.35 * spaceFactor}
-            />
-          </mesh>
-        </group>
-      )}
+        {/* Luminous Blue Atmospheric Limb Glow Ring */}
+        <mesh scale={[1.02, 1.02, 1.02]} frustumCulled>
+          <sphereGeometry args={[1800, 32, 32]} />
+          <meshBasicMaterial
+            color="#0284c7"
+            side={THREE.BackSide}
+            transparent
+            opacity={0.35 * spaceFactor}
+          />
+        </mesh>
+      </group>
     </group>
   );
 };

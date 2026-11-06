@@ -103,6 +103,17 @@ function createRockyGeom(seed: number, stretch: [number, number, number]): THREE
   return geom;
 }
 
+const _astCurPos = new THREE.Vector3();
+const _astPrevPos = new THREE.Vector3();
+const _astSeg = new THREE.Vector3();
+const _astDiff = new THREE.Vector3();
+const _astClosest = new THREE.Vector3();
+const _astCurLocal = new THREE.Vector3();
+const _astPrevLocal = new THREE.Vector3();
+const _astLocalSeg = new THREE.Vector3();
+const _astWorldHit = new THREE.Vector3();
+const _astUp = new THREE.Vector3(0, 1, 0);
+
 interface AsteroidBeltProps {
   altitude: number;
   rocketPos: THREE.Vector3;
@@ -215,25 +226,32 @@ export function AsteroidBelt({
       return;
     }
 
-    const currentPos = rocketPos.clone();
-    const prevPos = prevRocketPosRef.current ? prevRocketPosRef.current.clone() : currentPos.clone();
-    prevRocketPosRef.current = currentPos.clone();
+    _astCurPos.copy(rocketPos);
+    if (!prevRocketPosRef.current) {
+      prevRocketPosRef.current = _astCurPos.clone();
+      _astPrevPos.copy(_astCurPos);
+    } else {
+      _astPrevPos.copy(prevRocketPosRef.current);
+      prevRocketPosRef.current.copy(_astCurPos);
+    }
 
-    const seg = currentPos.clone().sub(prevPos);
-    const segLenSq = seg.lengthSq();
+    _astSeg.copy(_astCurPos).sub(_astPrevPos);
+    const segLenSq = _astSeg.lengthSq();
 
-    // Check 1: Corridor Asteroids along the flight path
+    // Check 1: Corridor Asteroids along the flight path (Zero GC)
     for (let i = 0; i < corridorAsteroids.length; i++) {
       const a = corridorAsteroids[i];
       if (a.checked) continue;
-      if (Math.abs(currentPos.y - a.pos.y) > a.radius + 35) continue;
+      if (Math.abs(_astCurPos.y - a.pos.y) > a.radius + 35) continue;
 
       let dist = 0;
       if (segLenSq < 0.001) {
-        dist = currentPos.distanceTo(a.pos);
+        dist = _astCurPos.distanceTo(a.pos);
       } else {
-        const u = THREE.MathUtils.clamp(a.pos.clone().sub(prevPos).dot(seg) / segLenSq, 0, 1);
-        dist = prevPos.clone().addScaledVector(seg, u).distanceTo(a.pos);
+        _astDiff.copy(a.pos).sub(_astPrevPos);
+        const u = THREE.MathUtils.clamp(_astDiff.dot(_astSeg) / segLenSq, 0, 1);
+        _astClosest.copy(_astPrevPos).addScaledVector(_astSeg, u);
+        dist = _astClosest.distanceTo(a.pos);
       }
 
       if (dist <= a.radius + 8.5) {
@@ -251,13 +269,13 @@ export function AsteroidBelt({
       }
     }
 
-    // Check 2: Mars 360° Ring Asteroids (transformed into ring's rotating local space)
-    const distToMars = currentPos.distanceTo(MARS_POSITION);
+    // Check 2: Mars 360° Ring Asteroids (transformed into ring's rotating local space - Zero GC)
+    const distToMars = _astCurPos.distanceTo(MARS_POSITION);
     if (distToMars <= 3200 && distToMars >= 1000) {
-      const curLocal = currentPos.clone().sub(MARS_POSITION).applyAxisAngle(new THREE.Vector3(0, 1, 0), -ringAngleRef.current);
-      const prevLocal = prevPos.clone().sub(MARS_POSITION).applyAxisAngle(new THREE.Vector3(0, 1, 0), -ringAngleRef.current);
-      const localSeg = curLocal.clone().sub(prevLocal);
-      const localSegLenSq = localSeg.lengthSq();
+      _astCurLocal.copy(_astCurPos).sub(MARS_POSITION).applyAxisAngle(_astUp, -ringAngleRef.current);
+      _astPrevLocal.copy(_astPrevPos).sub(MARS_POSITION).applyAxisAngle(_astUp, -ringAngleRef.current);
+      _astLocalSeg.copy(_astCurLocal).sub(_astPrevLocal);
+      const localSegLenSq = _astLocalSeg.lengthSq();
 
       for (let i = 0; i < ringAsteroids.length; i++) {
         const a = ringAsteroids[i];
@@ -265,23 +283,25 @@ export function AsteroidBelt({
 
         let dist = 0;
         if (localSegLenSq < 0.001) {
-          dist = curLocal.distanceTo(a.localPos);
+          dist = _astCurLocal.distanceTo(a.localPos);
         } else {
-          const u = THREE.MathUtils.clamp(a.localPos.clone().sub(prevLocal).dot(localSeg) / localSegLenSq, 0, 1);
-          dist = prevLocal.clone().addScaledVector(localSeg, u).distanceTo(a.localPos);
+          _astDiff.copy(a.localPos).sub(_astPrevLocal);
+          const u = THREE.MathUtils.clamp(_astDiff.dot(_astLocalSeg) / localSegLenSq, 0, 1);
+          _astClosest.copy(_astPrevLocal).addScaledVector(_astLocalSeg, u);
+          dist = _astClosest.distanceTo(a.localPos);
         }
 
         if (dist <= a.radius + 8.5) {
           a.checked = true;
           encounterCountRef.current++;
-          const worldHit = a.localPos.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ringAngleRef.current).add(MARS_POSITION);
+          _astWorldHit.copy(a.localPos).applyAxisAngle(_astUp, ringAngleRef.current).add(MARS_POSITION);
           const isBlast = Math.random() < 0.25 || encounterCountRef.current >= 2;
           if (isBlast) {
             playAsteroidExplosion();
-            onBlast(worldHit, a.radius);
+            onBlast(_astWorldHit, a.radius);
           } else {
             playDeflectionSound();
-            onDeflection(worldHit);
+            onDeflection(_astWorldHit);
           }
           return;
         }

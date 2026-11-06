@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -13,6 +13,18 @@ export const StormchaserCar: React.FC<{
   const { scene } = useGLTF('/models/lynx_stormchaser_ex2.glb');
   const ref = useRef<THREE.Group>(null);
 
+  const carScene = useMemo(() => {
+    const clone = scene.clone();
+    clone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.frustumCulled = true;
+      }
+    });
+    return clone;
+  }, [scene]);
+
   useFrame(() => {
     if (!ref.current) return;
     ref.current.position.copy(position);
@@ -22,7 +34,7 @@ export const StormchaserCar: React.FC<{
 
   return (
     <group ref={ref}>
-      <primitive object={scene} scale={108} />
+      <primitive object={carScene} scale={108} />
     </group>
   );
 };

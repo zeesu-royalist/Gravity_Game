@@ -18,6 +18,28 @@ import { AsteroidBelt } from './AsteroidBelt';
 const EARTH_LANDING_SITE = new THREE.Vector3(0, 0.2, 0);
 const MOON_APPROACH = new THREE.Vector3(MOON_LANDING_SITE.x, MOON_TOUCHDOWN_Y + 180, MOON_LANDING_SITE.z);
 const MARS_APPROACH = new THREE.Vector3(MARS_LANDING_SITE.x, MARS_TOUCHDOWN_Y + 240, MARS_LANDING_SITE.z);
+const _earthWpHigh = new THREE.Vector3(0, 600, 0);
+const _earthWpLow = new THREE.Vector3(0, 200, 0);
+
+// Preallocated scratch vectors for zero-allocation 60 FPS performance
+const _camTarget = new THREE.Vector3();
+const _camDeltaPos = new THREE.Vector3();
+const _camHorizMove = new THREE.Vector3();
+const _camDesiredBack = new THREE.Vector3();
+const _camOffset = new THREE.Vector3();
+const _camCurrentBack = new THREE.Vector3();
+const _camUp = new THREE.Vector3(0, 1, 0);
+const _camDefaultBack = new THREE.Vector3(0, 0, 1);
+
+const _fpDepWp = new THREE.Vector3();
+const _fpToDep = new THREE.Vector3();
+const _fpTargetQuat = new THREE.Quaternion();
+const _fpUp = new THREE.Vector3(0, 1, 0);
+const _fpVelTarget = new THREE.Vector3();
+const _fpWaypoint = new THREE.Vector3();
+const _fpToWaypoint = new THREE.Vector3();
+const _fpCruiseVel = new THREE.Vector3();
+const _fpFwd = new THREE.Vector3();
 
 const DESTINATIONS = [
   { id: 'EARTH' as const, icon: '🌍', name: 'EARTH', base: 'Buran Pad', g: '1.0G', v: 'Stormchaser' },
@@ -65,33 +87,39 @@ function UniversalThirdPersonCamera({
     const ctrl = controlsRef.current;
     if (!ctrl) return;
 
-    // 1. Target calculation based on mode (Anchor point)
-    const target = playerMode === 'ROCKET'
-      ? new THREE.Vector3(rocketPos.x, Math.max(0.2, rocketPos.y) + 13.5, rocketPos.z)
-      : (playerMode === 'ASTRONAUT' ? astronautPos : roverPos).clone().add(new THREE.Vector3(0, playerMode === 'ASTRONAUT' ? 1.2 : 1.3, 0));
+    // 1. Target calculation based on mode (Anchor point) - Zero GC
+    if (playerMode === 'ROCKET') {
+      _camTarget.set(rocketPos.x, Math.max(0.2, rocketPos.y) + 13.5, rocketPos.z);
+    } else if (playerMode === 'ASTRONAUT') {
+      _camTarget.copy(astronautPos);
+      _camTarget.y += 1.2;
+    } else {
+      _camTarget.copy(roverPos);
+      _camTarget.y += 1.3;
+    }
 
     // 2. Mode transition: position camera behind entity
     if (prevMode.current !== playerMode) {
       prevMode.current = playerMode;
       if (playerMode === 'ASTRONAUT') {
-        camera.position.set(target.x, target.y + 2.0, target.z - 10.0);
+        camera.position.set(_camTarget.x, _camTarget.y + 2.0, _camTarget.z - 10.0);
       } else if (playerMode === 'ROVER') {
-        camera.position.set(target.x, target.y + 3.2, target.z - 14.0);
+        camera.position.set(_camTarget.x, _camTarget.y + 3.2, _camTarget.z - 14.0);
       } else {
-        camera.position.set(target.x, target.y + 3.0, target.z + 46.0);
+        camera.position.set(_camTarget.x, _camTarget.y + 3.0, _camTarget.z + 46.0);
       }
-      prevTarget.current.copy(target);
-      ctrl.target.copy(target);
+      prevTarget.current.copy(_camTarget);
+      ctrl.target.copy(_camTarget);
       ctrl.update();
       lastDragEndTime.current = 0;
       return;
     }
 
     // 3. Move camera along with target movement (Camera is firmly anchored to entity)
-    const deltaPos = target.clone().sub(prevTarget.current);
-    camera.position.add(deltaPos);
-    ctrl.target.copy(target);
-    prevTarget.current.copy(target);
+    _camDeltaPos.copy(_camTarget).sub(prevTarget.current);
+    camera.position.add(_camDeltaPos);
+    ctrl.target.copy(_camTarget);
+    prevTarget.current.copy(_camTarget);
 
     // 4. Handle smooth turning and alignment when user is NOT actively dragging
     if (!isUserDragging.current) {
@@ -99,15 +127,15 @@ function UniversalThirdPersonCamera({
       const isTurnLeft = !!(keys['KeyA'] || keys['ArrowLeft']);
       const isTurnRight = !!(keys['KeyD'] || keys['ArrowRight']);
 
-      const horizMove = new THREE.Vector3(deltaPos.x, 0, deltaPos.z);
-      const isEntityMoving = (playerMode === 'ROVER' || playerMode === 'ASTRONAUT') && horizMove.lengthSq() > 0.0001;
+      _camHorizMove.set(_camDeltaPos.x, 0, _camDeltaPos.z);
+      const isEntityMoving = (playerMode === 'ROVER' || playerMode === 'ASTRONAUT') && _camHorizMove.lengthSq() > 0.0001;
 
       if (isEntityMoving) {
         // Smooth cinematic chase camera for Astronaut & Rover (GTA style)
-        const desiredBack = horizMove.normalize().negate();
-        const offset = camera.position.clone().sub(target);
-        const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
-        let angleDiff = Math.atan2(desiredBack.x, desiredBack.z) - Math.atan2(currentBack.x, currentBack.z);
+        _camDesiredBack.copy(_camHorizMove).normalize().negate();
+        _camOffset.copy(camera.position).sub(_camTarget);
+        _camCurrentBack.set(_camOffset.x, 0, _camOffset.z).normalize();
+        let angleDiff = Math.atan2(_camDesiredBack.x, _camDesiredBack.z) - Math.atan2(_camCurrentBack.x, _camCurrentBack.z);
         if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
         if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
@@ -117,8 +145,8 @@ function UniversalThirdPersonCamera({
         if (isTurnRight) steerAssist -= assistRate * delta;
 
         const alignSpeed = Math.min(1.0, delta * (playerMode === 'ASTRONAUT' ? 2.6 : 2.2));
-        offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed + steerAssist);
-        camera.position.copy(target).add(offset);
+        _camOffset.applyAxisAngle(_camUp, angleDiff * alignSpeed + steerAssist);
+        camera.position.copy(_camTarget).add(_camOffset);
       } else {
         // Smooth pivot turning when steering Left/Right
         const turnRate = playerMode === 'ASTRONAUT' ? 1.2 : playerMode === 'ROVER' ? 0.75 : (rocketPos.y > 3500 ? 1.5 : 1.2);
@@ -127,30 +155,32 @@ function UniversalThirdPersonCamera({
         if (isTurnRight) rotDelta -= turnRate * delta;
 
         if (rotDelta !== 0) {
-          const offset = camera.position.clone().sub(target);
-          offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotDelta);
-          camera.position.copy(target).add(offset);
+          _camOffset.copy(camera.position).sub(_camTarget);
+          _camOffset.applyAxisAngle(_camUp, rotDelta);
+          camera.position.copy(_camTarget).add(_camOffset);
         } else {
           // Smooth auto-return to third-person view after 2.5 seconds of inactivity
           const now = performance.now();
           const timeSinceDrag = now - lastDragEndTime.current;
           if (timeSinceDrag > 2500) {
-            let desiredBack: THREE.Vector3 | null = null;
-            if (playerMode === 'ROCKET' && isFlying && horizMove.lengthSq() > 0.00005) {
-              desiredBack = horizMove.normalize().negate();
+            let hasDesired = false;
+            if (playerMode === 'ROCKET' && isFlying && _camHorizMove.lengthSq() > 0.00005) {
+              _camDesiredBack.copy(_camHorizMove).normalize().negate();
+              hasDesired = true;
             } else if (playerMode === 'ROCKET' && !isFlying) {
-              desiredBack = new THREE.Vector3(0, 0, 1);
+              _camDesiredBack.copy(_camDefaultBack);
+              hasDesired = true;
             }
 
-            if (desiredBack) {
-              const offset = camera.position.clone().sub(target);
-              const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
-              let angleDiff = Math.atan2(desiredBack.x, desiredBack.z) - Math.atan2(currentBack.x, currentBack.z);
+            if (hasDesired) {
+              _camOffset.copy(camera.position).sub(_camTarget);
+              _camCurrentBack.set(_camOffset.x, 0, _camOffset.z).normalize();
+              let angleDiff = Math.atan2(_camDesiredBack.x, _camDesiredBack.z) - Math.atan2(_camCurrentBack.x, _camCurrentBack.z);
               if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
               if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
               const alignSpeed = Math.min(1.0, delta * 1.8);
-              offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed);
-              camera.position.copy(target).add(offset);
+              _camOffset.applyAxisAngle(_camUp, angleDiff * alignSpeed);
+              camera.position.copy(_camTarget).add(_camOffset);
             }
           }
         }
@@ -651,27 +681,33 @@ export default function App() {
 
         if (autopilotRef.current) {
           if (isDeparting) {
-            const depWaypoint = new THREE.Vector3(originPad.x, originPad.y + 400, originPad.z);
-            const toDep = depWaypoint.clone().sub(pos).normalize();
-            quatRef.current.slerp(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), toDep), delta * 4.0);
-            vel.lerp(new THREE.Vector3(0, 180, 0), delta * 3.0);
+            _fpDepWp.set(originPad.x, originPad.y + 400, originPad.z);
+            _fpToDep.copy(_fpDepWp).sub(pos).normalize();
+            _fpTargetQuat.setFromUnitVectors(_fpUp, _fpToDep);
+            quatRef.current.slerp(_fpTargetQuat, delta * 4.0);
+            _fpVelTarget.set(0, 180, 0);
+            vel.lerp(_fpVelTarget, delta * 3.0);
             pos.addScaledVector(vel, delta);
           } else if (altAbovePad <= 0.8 && hDistToPad <= 24.0) {
             landRocket(targetPad, isMars ? 'MARS' : isMoon ? 'MOON' : 'EARTH');
           } else if (altAbovePad < 250 && hDistToPad < 140) {
-            quatRef.current.slerp(new THREE.Quaternion(), delta * 4.5);
+            _fpTargetQuat.identity();
+            quatRef.current.slerp(_fpTargetQuat, delta * 4.5);
             pos.x = THREE.MathUtils.lerp(pos.x, targetPad.x, delta * 3.5);
             pos.z = THREE.MathUtils.lerp(pos.z, targetPad.z, delta * 3.5);
             const descentSpeed = Math.max(1.5, Math.min(26, altAbovePad * 0.35));
             pos.y = Math.max(targetPad.y, pos.y - descentSpeed * delta);
             vel.set(0, -descentSpeed, 0);
           } else {
-            const waypoint = isMars ? MARS_APPROACH : isMoon ? MOON_APPROACH : (pos.y > 800 ? new THREE.Vector3(0, 600, 0) : new THREE.Vector3(0, 200, 0));
-            const toWaypoint = waypoint.clone().sub(pos);
-            const dist = toWaypoint.length();
-            quatRef.current.slerp(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), toWaypoint.normalize()), delta * 3.5);
+            const waypoint = isMars ? MARS_APPROACH : isMoon ? MOON_APPROACH : (pos.y > 800 ? _earthWpHigh : _earthWpLow);
+            _fpToWaypoint.copy(waypoint).sub(pos);
+            const dist = _fpToWaypoint.length();
+            if (dist > 0.001) _fpToWaypoint.multiplyScalar(1 / dist);
+            _fpTargetQuat.setFromUnitVectors(_fpUp, _fpToWaypoint);
+            quatRef.current.slerp(_fpTargetQuat, delta * 3.5);
             const cruiseSpeed = dist > 2500 ? (isMars ? 1600 : 1400) : Math.max(50, dist * 0.45);
-            vel.lerp(new THREE.Vector3(0, 1, 0).applyQuaternion(quatRef.current).multiplyScalar(cruiseSpeed), delta * 2.8);
+            _fpCruiseVel.copy(_fpUp).applyQuaternion(quatRef.current).multiplyScalar(cruiseSpeed);
+            vel.lerp(_fpCruiseVel, delta * 2.8);
             pos.addScaledVector(vel, delta);
           }
         } else if (playerModeRef.current === 'ROCKET') {
@@ -684,9 +720,9 @@ export default function App() {
           if (keys['KeyE']) rotRef.current.z -= turn * delta;
 
           quatRef.current.setFromEuler(rotRef.current);
-          const fwd = new THREE.Vector3(0, 1, 0).applyQuaternion(quatRef.current);
+          _fpFwd.copy(_fpUp).applyQuaternion(quatRef.current);
           const boost = THREE.MathUtils.clamp((pos.y - 2000) / 4000, 0, 1);
-          vel.addScaledVector(fwd, (38 + boost * 85) * throttleRef.current * delta);
+          vel.addScaledVector(_fpFwd, (38 + boost * 85) * throttleRef.current * delta);
 
           if (pos.y > 0.2 && pos.y < 2500 && Math.hypot(pos.x, pos.z) < 3000) vel.y -= 9.8 * (1 - pos.y / 2500) * delta;
           pos.addScaledVector(vel, delta);
@@ -717,7 +753,7 @@ export default function App() {
             : Math.round(pos.distanceTo(EARTH_LANDING_SITE));
         const targetDist = destDist;
 
-        if (now - lastStatUpdate.current > 60) {
+        if (now - lastStatUpdate.current > 100) {
           lastStatUpdate.current = now;
           setStats({
             altitude: Math.max(0, Math.round(pos.y)),
@@ -1275,8 +1311,14 @@ export default function App() {
       {/* 3D WebGL Canvas */}
       <Canvas
         shadows
+        dpr={[1, typeof window !== 'undefined' && window.devicePixelRatio > 1.75 ? 1.5 : 2]}
         camera={{ position: [0, 16, 62], fov: 45, near: 0.5, far: 85000 }}
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
+        gl={{
+          antialias: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.2,
+          powerPreference: 'high-performance',
+        }}
       >
         {!isInSpace ? (
           <>
@@ -1285,16 +1327,16 @@ export default function App() {
               position={[200, 240, 150]}
               intensity={2.6}
               color="#fffdf6"
-              castShadow
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
+              castShadow={stats.altitude < 600}
+              shadow-mapSize-width={1024}
+              shadow-mapSize-height={1024}
               shadow-camera-near={10}
               shadow-camera-far={400}
               shadow-camera-left={-80}
               shadow-camera-right={80}
               shadow-camera-top={80}
               shadow-camera-bottom={-80}
-              shadow-bias={-0.0001}
+              shadow-bias={-0.0002}
             />
             <hemisphereLight args={['#b8e3fd', '#a6dc6e', 0.65]} />
           </>
@@ -1314,7 +1356,19 @@ export default function App() {
 
         <Suspense fallback={<Loader />}>
           <RealisticLandscape altitude={stats.altitude} />
-          <BuranLaunchpad />
+          <BuranLaunchpad altitude={stats.altitude} />
+          <EarthExploration
+            altitude={stats.altitude}
+            isActive={!isFlying && !isAtMoon && !isAtMars && (stats.altitude < 100 || isLanded || !isFlying)}
+            playerMode={playerMode}
+            onPlayerModeChange={setPlayerMode}
+            onUpdateHUD={handleUpdateHUD}
+            astronautPosRef={earthAstroPosRef}
+            carPosRef={earthCarPosRef}
+            keysRef={keysRef}
+            rocketPos={posRef.current}
+          />
+
           <SpaceEnvironment altitude={stats.altitude} rocketPos={posRef.current} />
           <LunarLandingSiteMarker />
 
@@ -1340,39 +1394,32 @@ export default function App() {
             isExploding={isExploding}
           />
 
-          <EarthExploration
-            isActive={!isFlying && !isAtMoon && !isAtMars && (stats.altitude < 100 || isLanded || !isFlying)}
-            playerMode={playerMode}
-            onPlayerModeChange={setPlayerMode}
-            onUpdateHUD={handleUpdateHUD}
-            astronautPosRef={earthAstroPosRef}
-            carPosRef={earthCarPosRef}
-            keysRef={keysRef}
-            rocketPos={posRef.current}
-          />
+          {((isAtMoon && isLanded) || (destination === 'MOON' && stats.targetDist < 1800) || (launchOriginRef.current === 'MOON' && isFlying && posRef.current.distanceTo(MOON_LANDING_SITE) < 1800)) && (
+            <MoonExploration
+              isLanded={isLanded && isAtMoon}
+              playerMode={playerMode}
+              onPlayerModeChange={setPlayerMode}
+              onUpdateHUD={handleUpdateHUD}
+              astronautPosRef={moonAstroPosRef}
+              roverPosRef={moonRoverPosRef}
+              keysRef={keysRef}
+              rocketOnMoon={isLanded && isAtMoon}
+            />
+          )}
 
-          <MoonExploration
-            isLanded={isLanded && isAtMoon}
-            playerMode={playerMode}
-            onPlayerModeChange={setPlayerMode}
-            onUpdateHUD={handleUpdateHUD}
-            astronautPosRef={moonAstroPosRef}
-            roverPosRef={moonRoverPosRef}
-            keysRef={keysRef}
-            rocketOnMoon={isLanded && isAtMoon}
-          />
-
-          <MarsExploration
-            isLanded={isLanded && isAtMars}
-            playerMode={playerMode}
-            onPlayerModeChange={setPlayerMode}
-            onUpdateHUD={handleUpdateHUD}
-            astronautPosRef={marsAstroPosRef}
-            roverPosRef={marsRoverPosRef}
-            keysRef={keysRef}
-            rocketOnMars={isLanded && isAtMars}
-            onAstronautHit={handleAstronautDamage}
-          />
+          {((isAtMars && isLanded) || (destination === 'MARS' && stats.targetDist < 2200) || (launchOriginRef.current === 'MARS' && isFlying && posRef.current.distanceTo(MARS_LANDING_SITE) < 2200)) && (
+            <MarsExploration
+              isLanded={isLanded && isAtMars}
+              playerMode={playerMode}
+              onPlayerModeChange={setPlayerMode}
+              onUpdateHUD={handleUpdateHUD}
+              astronautPosRef={marsAstroPosRef}
+              roverPosRef={marsRoverPosRef}
+              keysRef={keysRef}
+              rocketOnMars={isLanded && isAtMars}
+              onAstronautHit={handleAstronautDamage}
+            />
+          )}
         </Suspense>
       </Canvas>
     </div>

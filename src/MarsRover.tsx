@@ -31,6 +31,7 @@ export const MarsRover: React.FC<MarsRoverProps> = ({
       if ((child as THREE.Mesh).isMesh) {
         child.castShadow = false;
         child.receiveShadow = false;
+        child.frustumCulled = true;
       }
     });
     return cloned;

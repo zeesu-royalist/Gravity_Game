@@ -32,7 +32,7 @@ export const LunarRover: React.FC<LunarRoverProps> = ({
       if ((child as THREE.Mesh).isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        child.frustumCulled = false;
+        child.frustumCulled = true;
         const mat = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
         if (mat) {
           // 1. Moderate color brightness lift

@@ -187,7 +187,7 @@ const QueenInstance: React.FC<{
       if ((child as THREE.Mesh).isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        child.frustumCulled = false;
+        child.frustumCulled = true;
       }
     });
     return c;

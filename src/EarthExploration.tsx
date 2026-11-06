@@ -16,12 +16,23 @@ export function getEarthSurfaceElevation(x: number, z: number): number {
   return Math.hypot(x, z) <= 38 ? 0.26 : getCurvedEarthY(x, z) + 0.25;
 }
 
+const _earthNormal = new THREE.Vector3();
+const _earthFlatFwd = new THREE.Vector3();
+const _earthTangentFwd = new THREE.Vector3();
+const _earthTangentRight = new THREE.Vector3();
+const _earthBasisMat = new THREE.Matrix4();
+const _earthQuatResult = new THREE.Quaternion();
+const _earthFwdVec = new THREE.Vector3(0, 0, 1);
+const _earthFacing = new THREE.Vector3();
+
 export function getEarthSurfaceQuat(x: number, z: number, headingAngle: number): THREE.Quaternion {
-  const normal = new THREE.Vector3(x, getEarthSurfaceElevation(x, z) + 1799.75, z).normalize();
-  const flatForward = new THREE.Vector3(Math.sin(headingAngle), 0, Math.cos(headingAngle));
-  const tangentForward = flatForward.sub(normal.clone().multiplyScalar(flatForward.dot(normal))).normalize();
-  const tangentRight = new THREE.Vector3().crossVectors(normal, tangentForward).normalize();
-  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tangentRight, normal, tangentForward));
+  _earthNormal.set(x, getEarthSurfaceElevation(x, z) + 1799.75, z).normalize();
+  _earthFlatFwd.set(Math.sin(headingAngle), 0, Math.cos(headingAngle));
+  const dot = _earthFlatFwd.dot(_earthNormal);
+  _earthTangentFwd.copy(_earthFlatFwd).addScaledVector(_earthNormal, -dot).normalize();
+  _earthTangentRight.crossVectors(_earthNormal, _earthTangentFwd).normalize();
+  _earthBasisMat.makeBasis(_earthTangentRight, _earthNormal, _earthTangentFwd);
+  return _earthQuatResult.setFromRotationMatrix(_earthBasisMat);
 }
 
 interface EarthExplorationProps {
@@ -39,6 +50,7 @@ interface EarthExplorationProps {
   carPosRef: React.MutableRefObject<THREE.Vector3>;
   keysRef: React.MutableRefObject<{ [key: string]: boolean }>;
   rocketPos: THREE.Vector3;
+  altitude?: number;
 }
 
 export const EarthExploration: React.FC<EarthExplorationProps> = ({
@@ -49,6 +61,7 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
   carPosRef,
   keysRef,
   rocketPos,
+  altitude = 0,
 }) => {
   const astronautRotY = useRef(0);
   const astronautQuat = useRef(new THREE.Quaternion());
@@ -82,8 +95,8 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
 
       astronautQuat.current.slerp(getEarthSurfaceQuat(astroPos.x, astroPos.z, astronautRotY.current), delta * 12);
       if (forwardDir !== 0) {
-        const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(astronautQuat.current);
-        astroPos.addScaledVector(facing, forwardDir * 5.6 * delta);
+        _earthFacing.copy(_earthFwdVec).applyQuaternion(astronautQuat.current);
+        astroPos.addScaledVector(_earthFacing, forwardDir * 5.6 * delta);
       }
 
       const surfaceY = getEarthSurfaceElevation(astroPos.x, astroPos.z);
@@ -123,11 +136,13 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
       else carSpeed.current = THREE.MathUtils.lerp(carSpeed.current, 0, delta * 2.2);
 
       carQuat.current.slerp(getEarthSurfaceQuat(carPos.x, carPos.z, carRotY.current), delta * 12);
-      carPos.addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(carQuat.current), carSpeed.current * delta);
+      _earthFacing.copy(_earthFwdVec).applyQuaternion(carQuat.current);
+      carPos.addScaledVector(_earthFacing, carSpeed.current * delta);
       carPos.y = getEarthSurfaceElevation(carPos.x, carPos.z);
       carWheelSpin.current += (carSpeed.current / 0.42) * delta;
 
-      astroPos.copy(carPos).add(new THREE.Vector3(0, 0.35, 0));
+      astroPos.copy(carPos);
+      astroPos.y += 0.35;
       astronautRotY.current = carRotY.current;
       astronautQuat.current.copy(carQuat.current);
     }
@@ -148,6 +163,8 @@ export const EarthExploration: React.FC<EarthExplorationProps> = ({
       });
     }
   });
+
+  if (altitude >= 2500) return null;
 
   return (
     <group>

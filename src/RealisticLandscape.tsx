@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
 import * as THREE from 'three';
@@ -70,22 +70,30 @@ function createNaturalGrassTexture(): THREE.CanvasTexture {
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(110, 110);
   texture.colorSpace = THREE.SRGBColorSpace; // Preserves natural bright sRGB colors
-  texture.anisotropy = 8;
+  texture.anisotropy = 4;
   return texture;
+}
+
+let _cachedGrassTexture: THREE.CanvasTexture | null = null;
+function getNaturalGrassTexture(): THREE.CanvasTexture {
+  if (!_cachedGrassTexture) {
+    _cachedGrassTexture = createNaturalGrassTexture();
+  }
+  return _cachedGrassTexture;
 }
 
 export const RealisticLandscape: React.FC<{ altitude?: number }> = ({ altitude = 0 }) => {
   const radarRef = useRef<THREE.Group>(null);
 
-  // Natural desaturated grass texture
-  const grassTexture = useMemo(() => createNaturalGrassTexture(), []);
+  // Natural desaturated grass texture (Module cached)
+  const grassTexture = useMemo(() => getNaturalGrassTexture(), []);
 
-  // 1. Curved Round Earth Sphere Cap (Curved Globe)
+  // 1. Curved Round Earth Sphere Cap (Curved Globe - optimized 64x32 segments)
   const earthSphereGeom = useMemo(() => {
     return new THREE.SphereGeometry(
       EARTH_RADIUS,
-      128,
       64,
+      32,
       0,
       Math.PI * 2,
       0,
@@ -205,7 +213,123 @@ export const RealisticLandscape: React.FC<{ altitude?: number }> = ({ altitude =
     return list;
   }, [grassTuftCount]);
 
+  // High-performance Instanced Mesh buffers (reduces draw calls from 2,220 down to 7)
+  const trunkGeom = useMemo(() => new THREE.CylinderGeometry(0.22, 0.36, 4, 8), []);
+  const trunkMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#38281a', roughness: 0.94 }), []);
+  const folGeom1 = useMemo(() => new THREE.ConeGeometry(2.5, 4.6, 8), []);
+  const folMat1 = useMemo(() => new THREE.MeshStandardMaterial({ color: '#233a23', roughness: 0.88 }), []);
+  const folGeom2 = useMemo(() => new THREE.ConeGeometry(1.9, 4.1, 8), []);
+  const folMat2 = useMemo(() => new THREE.MeshStandardMaterial({ color: '#2a452a', roughness: 0.88 }), []);
+  const folGeom3 = useMemo(() => new THREE.ConeGeometry(1.2, 3.5, 8), []);
+  const folMat3 = useMemo(() => new THREE.MeshStandardMaterial({ color: '#335233', roughness: 0.88 }), []);
+
+  const grassGeom = useMemo(() => new THREE.PlaneGeometry(0.75, 0.75), []);
+  const grassMat1 = useMemo(() => new THREE.MeshStandardMaterial({ color: '#b5e87a', side: THREE.DoubleSide, roughness: 0.8 }), []);
+  const grassMat2 = useMemo(() => new THREE.MeshStandardMaterial({ color: '#a2db6c', side: THREE.DoubleSide, roughness: 0.8 }), []);
+  const grassMat3 = useMemo(() => new THREE.MeshStandardMaterial({ color: '#8ecc58', side: THREE.DoubleSide, roughness: 0.8 }), []);
+
+  const stairGeom = useMemo(() => new THREE.BoxGeometry(3.2, 0.35, 0.65), []);
+  const stairMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.85 }), []);
+
+  const trunkMeshRef = useRef<THREE.InstancedMesh>(null);
+  const fol1MeshRef = useRef<THREE.InstancedMesh>(null);
+  const fol2MeshRef = useRef<THREE.InstancedMesh>(null);
+  const fol3MeshRef = useRef<THREE.InstancedMesh>(null);
+  const grass1MeshRef = useRef<THREE.InstancedMesh>(null);
+  const grass2MeshRef = useRef<THREE.InstancedMesh>(null);
+  const grass3MeshRef = useRef<THREE.InstancedMesh>(null);
+  const stairsMeshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const dummy = new THREE.Object3D();
+
+    treeTransforms.forEach((t, i) => {
+      // Trunk (local y = 2)
+      dummy.position.set(t.pos[0], t.pos[1] + 2 * t.scale, t.pos[2]);
+      dummy.scale.set(t.scale, t.scale, t.scale);
+      dummy.rotation.set(0, t.rotY, 0);
+      dummy.updateMatrix();
+      trunkMeshRef.current?.setMatrixAt(i, dummy.matrix);
+
+      // Foliage 1 (local y = 4.2)
+      dummy.position.set(t.pos[0], t.pos[1] + 4.2 * t.scale, t.pos[2]);
+      dummy.updateMatrix();
+      fol1MeshRef.current?.setMatrixAt(i, dummy.matrix);
+
+      // Foliage 2 (local y = 6.6)
+      dummy.position.set(t.pos[0], t.pos[1] + 6.6 * t.scale, t.pos[2]);
+      dummy.updateMatrix();
+      fol2MeshRef.current?.setMatrixAt(i, dummy.matrix);
+
+      // Foliage 3 (local y = 8.5)
+      dummy.position.set(t.pos[0], t.pos[1] + 8.5 * t.scale, t.pos[2]);
+      dummy.updateMatrix();
+      fol3MeshRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+
+    if (trunkMeshRef.current) {
+      trunkMeshRef.current.instanceMatrix.needsUpdate = true;
+      trunkMeshRef.current.computeBoundingSphere();
+    }
+    if (fol1MeshRef.current) {
+      fol1MeshRef.current.instanceMatrix.needsUpdate = true;
+      fol1MeshRef.current.computeBoundingSphere();
+    }
+    if (fol2MeshRef.current) {
+      fol2MeshRef.current.instanceMatrix.needsUpdate = true;
+      fol2MeshRef.current.computeBoundingSphere();
+    }
+    if (fol3MeshRef.current) {
+      fol3MeshRef.current.instanceMatrix.needsUpdate = true;
+      fol3MeshRef.current.computeBoundingSphere();
+    }
+
+    grassTuftTransforms.forEach((t, i) => {
+      dummy.position.set(t.pos[0], t.pos[1] + 0.35 * t.scale, t.pos[2]);
+      dummy.scale.set(t.scale, t.scale, t.scale);
+
+      dummy.rotation.set(0, t.rotY, 0);
+      dummy.updateMatrix();
+      grass1MeshRef.current?.setMatrixAt(i, dummy.matrix);
+
+      dummy.rotation.set(0, t.rotY + Math.PI / 3, 0);
+      dummy.updateMatrix();
+      grass2MeshRef.current?.setMatrixAt(i, dummy.matrix);
+
+      dummy.rotation.set(0, t.rotY - Math.PI / 3, 0);
+      dummy.updateMatrix();
+      grass3MeshRef.current?.setMatrixAt(i, dummy.matrix);
+    });
+
+    if (grass1MeshRef.current) {
+      grass1MeshRef.current.instanceMatrix.needsUpdate = true;
+      grass1MeshRef.current.computeBoundingSphere();
+    }
+    if (grass2MeshRef.current) {
+      grass2MeshRef.current.instanceMatrix.needsUpdate = true;
+      grass2MeshRef.current.computeBoundingSphere();
+    }
+    if (grass3MeshRef.current) {
+      grass3MeshRef.current.instanceMatrix.needsUpdate = true;
+      grass3MeshRef.current.computeBoundingSphere();
+    }
+
+    // 12 Catwalk Stairs (Instanced Mesh - cuts 12 draw calls to 1)
+    for (let stepIdx = 0; stepIdx < 12; stepIdx++) {
+      dummy.position.set(0, stepIdx * 0.35 + 0.18, stepIdx * 0.6);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      stairsMeshRef.current?.setMatrixAt(stepIdx, dummy.matrix);
+    }
+    if (stairsMeshRef.current) {
+      stairsMeshRef.current.instanceMatrix.needsUpdate = true;
+      stairsMeshRef.current.computeBoundingSphere();
+    }
+  }, [treeTransforms, grassTuftTransforms]);
+
   useFrame((state) => {
+    if (altitude > 3000) return;
     if (radarRef.current) {
       radarRef.current.rotation.y = state.clock.getElapsedTime() * 0.4;
     }
@@ -264,23 +388,10 @@ export const RealisticLandscape: React.FC<{ altitude?: number }> = ({ altitude =
         />
       </mesh>
 
-      {/* ================= PHYSICAL 3D GREEN GRASS BLADES ================= */}
-      {grassTuftTransforms.map((t, idx) => (
-        <group key={idx} position={t.pos} scale={[t.scale, t.scale, t.scale]} rotation={[0, t.rotY, 0]}>
-          <mesh position={[0, 0.35, 0]} castShadow>
-            <planeGeometry args={[0.75, 0.75]} />
-            <meshStandardMaterial color="#b5e87a" side={THREE.DoubleSide} roughness={0.8} />
-          </mesh>
-          <mesh position={[0, 0.35, 0]} rotation={[0, Math.PI / 3, 0]} castShadow>
-            <planeGeometry args={[0.75, 0.75]} />
-            <meshStandardMaterial color="#a2db6c" side={THREE.DoubleSide} roughness={0.8} />
-          </mesh>
-          <mesh position={[0, 0.35, 0]} rotation={[0, -Math.PI / 3, 0]} castShadow>
-            <planeGeometry args={[0.75, 0.75]} />
-            <meshStandardMaterial color="#8ecc58" side={THREE.DoubleSide} roughness={0.8} />
-          </mesh>
-        </group>
-      ))}
+      {/* ================= PHYSICAL 3D GREEN GRASS BLADES (INSTANCED) ================= */}
+      <instancedMesh ref={grass1MeshRef} args={[grassGeom, grassMat1, grassTuftCount]} />
+      <instancedMesh ref={grass2MeshRef} args={[grassGeom, grassMat2, grassTuftCount]} />
+      <instancedMesh ref={grass3MeshRef} args={[grassGeom, grassMat3, grassTuftCount]} />
 
       {/* ================= CURVED HORIZON MOUNTAINS ================= */}
       <mesh geometry={mountainGeometry} receiveShadow>
@@ -292,156 +403,132 @@ export const RealisticLandscape: React.FC<{ altitude?: number }> = ({ altitude =
         />
       </mesh>
 
-      {/* ================= 3D PINE FOREST FOLLOWING EARTH CURVE ================= */}
-      {treeTransforms.map((t, idx) => (
-        <group key={idx} position={t.pos} scale={[t.scale, t.scale, t.scale]} rotation={[0, t.rotY, 0]}>
-          {/* Trunk */}
-          <mesh position={[0, 2, 0]} castShadow>
-            <cylinderGeometry args={[0.22, 0.36, 4, 8]} />
-            <meshStandardMaterial color="#38281a" roughness={0.94} />
-          </mesh>
-          {/* Conifer Foliage Tiers with Natural Forest Green */}
-          <mesh position={[0, 4.2, 0]} castShadow>
-            <coneGeometry args={[2.5, 4.6, 8]} />
-            <meshStandardMaterial color="#233a23" roughness={0.88} />
-          </mesh>
-          <mesh position={[0, 6.6, 0]} castShadow>
-            <coneGeometry args={[1.9, 4.1, 8]} />
-            <meshStandardMaterial color="#2a452a" roughness={0.88} />
-          </mesh>
-          <mesh position={[0, 8.5, 0]} castShadow>
-            <coneGeometry args={[1.2, 3.5, 8]} />
-            <meshStandardMaterial color="#335233" roughness={0.88} />
-          </mesh>
-        </group>
-      ))}
+      {/* ================= 3D PINE FOREST FOLLOWING EARTH CURVE (INSTANCED) ================= */}
+      <instancedMesh ref={trunkMeshRef} args={[trunkGeom, trunkMat, treeCount]} castShadow receiveShadow />
+      <instancedMesh ref={fol1MeshRef} args={[folGeom1, folMat1, treeCount]} castShadow receiveShadow />
+      <instancedMesh ref={fol2MeshRef} args={[folGeom2, folMat2, treeCount]} castShadow receiveShadow />
+      <instancedMesh ref={fol3MeshRef} args={[folGeom3, folMat3, treeCount]} castShadow receiveShadow />
 
-      {/* ================= REALISTIC SUPPORT BUILDINGS ================= */}
-      {/* 1. Launch Control Blockhouse Bunker */}
-      <group position={[-68, getCurvedEarthY(-68, -48), -48]}>
-        <mesh position={[0, 4, 0]} castShadow receiveShadow>
-          <boxGeometry args={[28, 8, 20]} />
-          <meshStandardMaterial color="#4a5568" roughness={0.84} metalness={0.18} />
-        </mesh>
-        {/* Sloped Blast Berm */}
-        <mesh position={[0, 2.5, 11]} rotation={[-0.4, 0, 0]} castShadow>
-          <boxGeometry args={[29, 6, 4]} />
-          <meshStandardMaterial color="#3d4654" roughness={0.9} />
-        </mesh>
-        {/* Observation Windows */}
-        <mesh position={[0, 5.2, 10.1]}>
-          <boxGeometry args={[16, 1.2, 0.2]} />
-          <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.9} />
-        </mesh>
-        {/* Rooftop HVAC */}
-        <mesh position={[-6, 8.5, -3]} castShadow>
-          <boxGeometry args={[4, 1.6, 6]} />
-          <meshStandardMaterial color="#718096" roughness={0.6} metalness={0.6} />
-        </mesh>
-        <mesh position={[4, 8.5, -3]} castShadow>
-          <boxGeometry args={[4, 1.6, 6]} />
-          <meshStandardMaterial color="#718096" roughness={0.6} metalness={0.6} />
-        </mesh>
-        {/* Tracking Radar Dish */}
-        <group position={[0, 8.2, 4]} ref={radarRef}>
-          <mesh position={[0, 1.5, 0]}>
-            <cylinderGeometry args={[0.2, 0.3, 3, 12]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
-          </mesh>
-          <mesh position={[0, 3.2, 0]} rotation={[0.4, 0, 0]}>
-            <sphereGeometry args={[1.8, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            <meshStandardMaterial color="#f1f5f9" side={THREE.DoubleSide} roughness={0.3} />
-          </mesh>
-        </group>
-      </group>
-
-      {/* 2. Vehicle Assembly / Integration Hangar */}
-      <group position={[95, getCurvedEarthY(95, -68), -68]}>
-        <mesh position={[0, 14, 0]} castShadow receiveShadow>
-          <boxGeometry args={[34, 28, 48]} />
-          <meshStandardMaterial color="#5e6d82" roughness={0.78} metalness={0.32} />
-        </mesh>
-        {/* Roof Arch */}
-        <mesh position={[0, 28.5, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[17.2, 17.2, 48, 16, 1, false, 0, Math.PI]} />
-          <meshStandardMaterial color="#475569" roughness={0.8} metalness={0.3} />
-        </mesh>
-        {/* Vertical Bay Door */}
-        <mesh position={[-17.1, 10, 0]}>
-          <boxGeometry args={[0.2, 20, 22]} />
-          <meshStandardMaterial color="#1e293b" roughness={0.6} metalness={0.6} />
-        </mesh>
-        {/* Yellow Safety Trim */}
-        <mesh position={[-17.2, 21.2, 0]}>
-          <boxGeometry args={[0.1, 1.2, 24]} />
-          <meshStandardMaterial color="#eab308" roughness={0.5} />
-        </mesh>
-      </group>
-
-      {/* 3. Cryogenic Propellant Storage Depot */}
-      <group position={[-75, getCurvedEarthY(-75, 26), 26]}>
-        <mesh position={[0, 0.8, 0]} castShadow receiveShadow>
-          <boxGeometry args={[26, 1.6, 22]} />
-          <meshStandardMaterial color="#5a6778" roughness={0.9} />
-        </mesh>
-        {/* Spherical LOX Tank */}
-        <group position={[-4, 7, 0]}>
-          <mesh castShadow>
-            <sphereGeometry args={[5.2, 24, 24]} />
-            <meshStandardMaterial color="#f8fafc" roughness={0.28} metalness={0.42} />
-          </mesh>
-          {[-3, 3].map((lx) =>
-            [-3, 3].map((lz) => (
-              <mesh key={`${lx}-${lz}`} position={[lx, -4.5, lz]}>
-                <cylinderGeometry args={[0.2, 0.2, 5]} />
-                <meshStandardMaterial color="#334155" metalness={0.8} />
+      {/* ================= REALISTIC SUPPORT BUILDINGS (Active below 4000m) ================= */}
+      {altitude < 4000 && (
+        <>
+          {/* 1. Launch Control Blockhouse Bunker */}
+          <group position={[-68, getCurvedEarthY(-68, -48), -48]}>
+            <mesh position={[0, 4, 0]} castShadow receiveShadow>
+              <boxGeometry args={[28, 8, 20]} />
+              <meshStandardMaterial color="#4a5568" roughness={0.84} metalness={0.18} />
+            </mesh>
+            {/* Sloped Blast Berm */}
+            <mesh position={[0, 2.5, 11]} rotation={[-0.4, 0, 0]} castShadow>
+              <boxGeometry args={[29, 6, 4]} />
+              <meshStandardMaterial color="#3d4654" roughness={0.9} />
+            </mesh>
+            {/* Observation Windows */}
+            <mesh position={[0, 5.2, 10.1]}>
+              <boxGeometry args={[16, 1.2, 0.2]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.1} metalness={0.9} />
+            </mesh>
+            {/* Rooftop HVAC */}
+            <mesh position={[-6, 8.5, -3]} castShadow>
+              <boxGeometry args={[4, 1.6, 6]} />
+              <meshStandardMaterial color="#718096" roughness={0.6} metalness={0.6} />
+            </mesh>
+            <mesh position={[4, 8.5, -3]} castShadow>
+              <boxGeometry args={[4, 1.6, 6]} />
+              <meshStandardMaterial color="#718096" roughness={0.6} metalness={0.6} />
+            </mesh>
+            {/* Tracking Radar Dish */}
+            <group position={[0, 8.2, 4]} ref={radarRef}>
+              <mesh position={[0, 1.5, 0]}>
+                <cylinderGeometry args={[0.2, 0.3, 3, 12]} />
+                <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
               </mesh>
-            ))
-          )}
-        </group>
-        {/* Horizontal Propellant Tank */}
-        <group position={[6.5, 4.5, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <mesh castShadow>
-            <cylinderGeometry args={[2.6, 2.6, 14, 20]} />
-            <meshStandardMaterial color="#e2e8f0" roughness={0.35} metalness={0.5} />
-          </mesh>
-        </group>
-        {/* Pipelines leading toward Launchpad */}
-        <group position={[18, 2, -10]}>
-          <mesh position={[0, 0, 0]} rotation={[0, -0.3, Math.PI / 2]}>
-            <cylinderGeometry args={[0.3, 0.3, 38]} />
-            <meshStandardMaterial color="#94a3b8" metalness={0.8} />
-          </mesh>
-          <mesh position={[0, 0.7, 0]} rotation={[0, -0.3, Math.PI / 2]}>
-            <cylinderGeometry args={[0.2, 0.2, 38]} />
-            <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
-          </mesh>
-        </group>
-      </group>
+              <mesh position={[0, 3.2, 0]} rotation={[0.4, 0, 0]}>
+                <sphereGeometry args={[1.8, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshStandardMaterial color="#f1f5f9" side={THREE.DoubleSide} roughness={0.3} />
+              </mesh>
+            </group>
+          </group>
 
-      {/* 4. Concrete Catwalk Stairs near Launch Apron */}
-      <group position={[18, 0, 16]} rotation={[0, -0.5, 0]}>
-        {Array.from({ length: 12 }).map((_, stepIdx) => (
-          <mesh
-            key={stepIdx}
-            position={[0, stepIdx * 0.35 + 0.18, stepIdx * 0.6]}
-            castShadow
-            receiveShadow
-          >
-            <boxGeometry args={[3.2, 0.35, 0.65]} />
-            <meshStandardMaterial color="#64748b" roughness={0.85} />
-          </mesh>
-        ))}
-        {/* Yellow Handrails */}
-        <mesh position={[1.5, 2.8, 3.6]} rotation={[0.52, 0, 0]}>
-          <cylinderGeometry args={[0.04, 0.04, 8.5]} />
-          <meshStandardMaterial color="#facc15" metalness={0.6} />
-        </mesh>
-        <mesh position={[-1.5, 2.8, 3.6]} rotation={[0.52, 0, 0]}>
-          <cylinderGeometry args={[0.04, 0.04, 8.5]} />
-          <meshStandardMaterial color="#facc15" metalness={0.6} />
-        </mesh>
-      </group>
+          {/* 2. Vehicle Assembly / Integration Hangar */}
+          <group position={[95, getCurvedEarthY(95, -68), -68]}>
+            <mesh position={[0, 14, 0]} castShadow receiveShadow>
+              <boxGeometry args={[34, 28, 48]} />
+              <meshStandardMaterial color="#5e6d82" roughness={0.78} metalness={0.32} />
+            </mesh>
+            {/* Roof Arch */}
+            <mesh position={[0, 28.5, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+              <cylinderGeometry args={[17.2, 17.2, 48, 16, 1, false, 0, Math.PI]} />
+              <meshStandardMaterial color="#475569" roughness={0.8} metalness={0.3} />
+            </mesh>
+            {/* Vertical Bay Door */}
+            <mesh position={[-17.1, 10, 0]}>
+              <boxGeometry args={[0.2, 20, 22]} />
+              <meshStandardMaterial color="#1e293b" roughness={0.6} metalness={0.6} />
+            </mesh>
+            {/* Yellow Safety Trim */}
+            <mesh position={[-17.2, 21.2, 0]}>
+              <boxGeometry args={[0.1, 1.2, 24]} />
+              <meshStandardMaterial color="#eab308" roughness={0.5} />
+            </mesh>
+          </group>
+
+          {/* 3. Cryogenic Propellant Storage Depot */}
+          <group position={[-75, getCurvedEarthY(-75, 26), 26]}>
+            <mesh position={[0, 0.8, 0]} castShadow receiveShadow>
+              <boxGeometry args={[26, 1.6, 22]} />
+              <meshStandardMaterial color="#5a6778" roughness={0.9} />
+            </mesh>
+            {/* Spherical LOX Tank */}
+            <group position={[-4, 7, 0]}>
+              <mesh castShadow>
+                <sphereGeometry args={[5.2, 24, 24]} />
+                <meshStandardMaterial color="#f8fafc" roughness={0.28} metalness={0.42} />
+              </mesh>
+              {[-3, 3].map((lx) =>
+                [-3, 3].map((lz) => (
+                  <mesh key={`${lx}-${lz}`} position={[lx, -4.5, lz]}>
+                    <cylinderGeometry args={[0.2, 0.2, 5]} />
+                    <meshStandardMaterial color="#334155" metalness={0.8} />
+                  </mesh>
+                ))
+              )}
+            </group>
+            {/* Horizontal Propellant Tank */}
+            <group position={[6.5, 4.5, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <mesh castShadow>
+                <cylinderGeometry args={[2.6, 2.6, 14, 20]} />
+                <meshStandardMaterial color="#e2e8f0" roughness={0.35} metalness={0.5} />
+              </mesh>
+            </group>
+            {/* Pipelines leading toward Launchpad */}
+            <group position={[18, 2, -10]}>
+              <mesh position={[0, 0, 0]} rotation={[0, -0.3, Math.PI / 2]}>
+                <cylinderGeometry args={[0.3, 0.3, 38]} />
+                <meshStandardMaterial color="#94a3b8" metalness={0.8} />
+              </mesh>
+              <mesh position={[0, 0.7, 0]} rotation={[0, -0.3, Math.PI / 2]}>
+                <cylinderGeometry args={[0.2, 0.2, 38]} />
+                <meshStandardMaterial color="#cbd5e1" metalness={0.8} />
+              </mesh>
+            </group>
+          </group>
+
+          {/* 4. Concrete Catwalk Stairs near Launch Apron (InstancedMesh - 1 draw call) */}
+          <group position={[18, 0, 16]} rotation={[0, -0.5, 0]}>
+            <instancedMesh ref={stairsMeshRef} args={[stairGeom, stairMat, 12]} castShadow receiveShadow />
+            {/* Yellow Handrails */}
+            <mesh position={[1.5, 2.8, 3.6]} rotation={[0.52, 0, 0]}>
+              <cylinderGeometry args={[0.04, 0.04, 8.5]} />
+              <meshStandardMaterial color="#facc15" metalness={0.6} />
+            </mesh>
+            <mesh position={[-1.5, 2.8, 3.6]} rotation={[0.52, 0, 0]}>
+              <cylinderGeometry args={[0.04, 0.04, 8.5]} />
+              <meshStandardMaterial color="#facc15" metalness={0.6} />
+            </mesh>
+          </group>
+        </>
+      )}
     </group>
   );
 };

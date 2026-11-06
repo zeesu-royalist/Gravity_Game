@@ -79,11 +79,17 @@ export const SCIENTISTS_DATA: ScientistData[] = [
   },
 ];
 
-export function SingleScientist({ data }: { data: ScientistData; astronautPosRef?: React.MutableRefObject<THREE.Vector3> }) {
+export function SingleScientist({ data, astronautPosRef }: { data: ScientistData; astronautPosRef?: React.MutableRefObject<THREE.Vector3> }) {
   const headRef = useRef<THREE.Group>(null);
   const chestRef = useRef<THREE.Group>(null);
 
   useFrame(({ clock }) => {
+    if (astronautPosRef?.current) {
+      const astro = astronautPosRef.current;
+      const dx = astro.x - data.position[0];
+      const dz = astro.z - data.position[2];
+      if (dx * dx + dz * dz > 2500) return; // Skip idle animations when > 50m away
+    }
     const t = clock.getElapsedTime() + data.position[0];
     if (headRef.current) headRef.current.rotation.y = Math.sin(t * 0.8) * 0.15;
     if (chestRef.current) chestRef.current.position.y = 0.95 + Math.sin(t * 1.5) * 0.015;

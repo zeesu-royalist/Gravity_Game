@@ -11,21 +11,27 @@ const BOOSTER_OFFSETS: [number, number, number][] = [
   [2.1, 0, 0], [-2.1, 0, 0], [0, 0, 1.35], [0, 0, -1.35],
 ];
 
-// Buran-Energia Launchpad on Earth
-export function BuranLaunchpad() {
+// Buran-Energia Launchpad on Earth (Optimized static matrix & frustum culling)
+export function BuranLaunchpad({ altitude = 0 }: { altitude?: number }) {
   const { scene } = useGLTF('/models/buran_energia_launchpad.glb');
   const alignedPad = useMemo(() => {
     const clone = scene.clone();
     clone.position.set(0, 24.03, -2.85);
+    clone.updateMatrix();
     clone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         if (child.name === 'Object_1158' || child.name === 'Object_1157') child.visible = false;
         child.castShadow = true;
         child.receiveShadow = true;
+        child.frustumCulled = true;
+        child.matrixAutoUpdate = false;
+        child.updateMatrix();
       }
     });
     return clone;
   }, [scene]);
+
+  if (altitude >= 3500) return null;
   return <primitive object={alignedPad} />;
 }
 
@@ -210,6 +216,8 @@ function RocketExplosionVisual() {
   );
 }
 
+let _cachedZeesuTex: THREE.CanvasTexture | null = null;
+
 export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rocketQuat, rcsActive, isExploding }: RocketProps) {
   const { scene } = useGLTF('/models/rocket.glb');
   const groupRef = useRef<THREE.Group>(null);
@@ -219,7 +227,10 @@ export function ActiveRocketMesh({ isFlying, isLanded, throttle, rocketPos, rock
   const boosterFlamesRef = useRef<THREE.Group>(null);
   const flameLightRef = useRef<THREE.PointLight>(null);
 
-  const zeesuTexture = useMemo(() => createZeesuEmblemTexture(), []);
+  const zeesuTexture = useMemo(() => {
+    if (!_cachedZeesuTex) _cachedZeesuTex = createZeesuEmblemTexture();
+    return _cachedZeesuTex;
+  }, []);
   const zeesuDecalGeom = useMemo(() => {
     const thetaLen = Math.PI * 0.32; // ~57° sleek wrap around fuselage
     return new THREE.CylinderGeometry(1.80, 1.80, 2.2, 32, 1, true, -thetaLen / 2, thetaLen);

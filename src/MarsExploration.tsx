@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Astronaut } from './Astronaut';
@@ -21,11 +21,23 @@ export function getMarsSurfaceElevation(x: number, z: number): number {
   return MARS_POSITION.y;
 }
 
+const _marsNormal = new THREE.Vector3();
+const _marsFlatFwd = new THREE.Vector3();
+const _marsTangentFwd = new THREE.Vector3();
+const _marsTangentRight = new THREE.Vector3();
+const _marsBasisMat = new THREE.Matrix4();
+const _marsQuatResult = new THREE.Quaternion();
+const _marsFwdVec = new THREE.Vector3(0, 0, 1);
+const _marsFacing = new THREE.Vector3();
+
 function getMarsSurfaceQuat(x: number, z: number, heading: number): THREE.Quaternion {
-  const normal = new THREE.Vector3(x - MARS_POSITION.x, getMarsSurfaceElevation(x, z) - MARS_POSITION.y, z - MARS_POSITION.z).normalize();
-  const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-  const tFwd = fwd.sub(normal.clone().multiplyScalar(fwd.dot(normal))).normalize();
-  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(normal, tFwd).normalize(), normal, tFwd));
+  _marsNormal.set(x - MARS_POSITION.x, getMarsSurfaceElevation(x, z) - MARS_POSITION.y, z - MARS_POSITION.z).normalize();
+  _marsFlatFwd.set(Math.sin(heading), 0, Math.cos(heading));
+  const dot = _marsFlatFwd.dot(_marsNormal);
+  _marsTangentFwd.copy(_marsFlatFwd).addScaledVector(_marsNormal, -dot).normalize();
+  _marsTangentRight.crossVectors(_marsNormal, _marsTangentFwd).normalize();
+  _marsBasisMat.makeBasis(_marsTangentRight, _marsNormal, _marsTangentFwd);
+  return _marsQuatResult.setFromRotationMatrix(_marsBasisMat);
 }
 
 interface MarsExplorationProps {
@@ -100,7 +112,7 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
     return geom;
   }, []);
 
-  // 2. Scattered Volcanic Martian Rocks
+  // 2. Scattered Volcanic Martian Rocks (Instanced)
   const boulders = useMemo(() => Array.from({ length: 48 }).map((_, i) => {
     const ang = (i / 48) * Math.PI * 2 + (i % 6) * 0.35;
     const dist = 36 + (i * 21) % 250;
@@ -112,6 +124,23 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
       rot: [i * 0.6, i * 1.2, i * 0.5] as [number, number, number],
     };
   }), []);
+
+  const boulderGeom = useMemo(() => new THREE.DodecahedronGeometry(1, 1), []);
+  const boulderMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#451a08', roughness: 0.96, metalness: 0.04 }), []);
+  const boulderMeshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    if (!boulderMeshRef.current) return;
+    const dummy = new THREE.Object3D();
+    boulders.forEach((b, i) => {
+      dummy.position.set(b.pos[0], b.pos[1], b.pos[2]);
+      dummy.scale.set(b.scale[0], b.scale[1], b.scale[2]);
+      dummy.rotation.set(b.rot[0], b.rot[1], b.rot[2]);
+      dummy.updateMatrix();
+      boulderMeshRef.current!.setMatrixAt(i, dummy.matrix);
+    });
+    boulderMeshRef.current.instanceMatrix.needsUpdate = true;
+  }, [boulders]);
 
   useFrame((_, delta) => {
     if (!isLanded) return;
@@ -132,7 +161,8 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
 
       astronautQuat.current.slerp(getMarsSurfaceQuat(astroPos.x, astroPos.z, astronautRotY.current), delta * 12);
       if (forwardDir !== 0) {
-        astroPos.addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(astronautQuat.current), forwardDir * 5.4 * delta);
+        _marsFacing.copy(_marsFwdVec).applyQuaternion(astronautQuat.current);
+        astroPos.addScaledVector(_marsFacing, forwardDir * 5.4 * delta);
       }
 
       const surfaceY = getMarsSurfaceElevation(astroPos.x, astroPos.z);
@@ -173,11 +203,13 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
       else roverSpeed.current = THREE.MathUtils.lerp(roverSpeed.current, 0, delta * 1.8);
 
       roverQuat.current.slerp(getMarsSurfaceQuat(rovPos.x, rovPos.z, roverRotY.current), delta * 12);
-      rovPos.addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(roverQuat.current), roverSpeed.current * delta);
+      _marsFacing.copy(_marsFwdVec).applyQuaternion(roverQuat.current);
+      rovPos.addScaledVector(_marsFacing, roverSpeed.current * delta);
       rovPos.y = getMarsSurfaceElevation(rovPos.x, rovPos.z);
       roverWheelSpin.current += (roverSpeed.current / 0.42) * delta;
 
-      astroPos.copy(rovPos).add(new THREE.Vector3(0, 0.35, 0));
+      astroPos.copy(rovPos);
+      astroPos.y += 0.35;
       astronautRotY.current = roverRotY.current;
       astronautQuat.current.copy(roverQuat.current);
     }
@@ -209,13 +241,8 @@ export const MarsExploration: React.FC<MarsExplorationProps> = ({
         </mesh>
       </group>
 
-      {/* 2. Martian Basalt Boulders */}
-      {boulders.map((b, i) => (
-        <mesh key={i} position={b.pos} scale={b.scale} rotation={b.rot} castShadow receiveShadow>
-          <dodecahedronGeometry args={[1, 1]} />
-          <meshStandardMaterial color="#451a08" roughness={0.96} metalness={0.04} />
-        </mesh>
-      ))}
+      {/* 2. Martian Basalt Boulders (Instanced - 1 Draw Call) */}
+      <instancedMesh ref={boulderMeshRef} args={[boulderGeom, boulderMat, boulders.length]} castShadow receiveShadow />
 
       {/* 3. Ares Base Alpha Habitat Dome & Solar Array */}
       <group position={[MARS_LANDING_SITE.x - 22, MARS_TOUCHDOWN_Y, MARS_LANDING_SITE.z - 16]}>

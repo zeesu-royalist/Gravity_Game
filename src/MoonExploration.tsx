@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Astronaut } from './Astronaut';
@@ -22,11 +22,23 @@ function getMoonSurfaceElevation(x: number, z: number): number {
   return MOON_POSITION.y;
 }
 
+const _moonNormal = new THREE.Vector3();
+const _moonFlatFwd = new THREE.Vector3();
+const _moonTangentFwd = new THREE.Vector3();
+const _moonTangentRight = new THREE.Vector3();
+const _moonBasisMat = new THREE.Matrix4();
+const _moonQuatResult = new THREE.Quaternion();
+const _moonFwdVec = new THREE.Vector3(0, 0, 1);
+const _moonFacing = new THREE.Vector3();
+
 function getMoonSurfaceQuat(x: number, z: number, heading: number): THREE.Quaternion {
-  const normal = new THREE.Vector3(x - MOON_POSITION.x, getMoonSurfaceElevation(x, z) - MOON_POSITION.y, z - MOON_POSITION.z).normalize();
-  const fwd = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-  const tFwd = fwd.sub(normal.clone().multiplyScalar(fwd.dot(normal))).normalize();
-  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(normal, tFwd).normalize(), normal, tFwd));
+  _moonNormal.set(x - MOON_POSITION.x, getMoonSurfaceElevation(x, z) - MOON_POSITION.y, z - MOON_POSITION.z).normalize();
+  _moonFlatFwd.set(Math.sin(heading), 0, Math.cos(heading));
+  const dot = _moonFlatFwd.dot(_moonNormal);
+  _moonTangentFwd.copy(_moonFlatFwd).addScaledVector(_moonNormal, -dot).normalize();
+  _moonTangentRight.crossVectors(_moonNormal, _moonTangentFwd).normalize();
+  _moonBasisMat.makeBasis(_moonTangentRight, _moonNormal, _moonTangentFwd);
+  return _moonQuatResult.setFromRotationMatrix(_moonBasisMat);
 }
 
 interface MoonExplorationProps {
@@ -100,6 +112,23 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
     };
   }), []);
 
+  const boulderGeom = useMemo(() => new THREE.DodecahedronGeometry(1, 1), []);
+  const boulderMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#3f4247', roughness: 0.96, metalness: 0.05 }), []);
+  const boulderMeshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    if (!boulderMeshRef.current) return;
+    const dummy = new THREE.Object3D();
+    boulders.forEach((b, i) => {
+      dummy.position.set(b.pos[0], b.pos[1], b.pos[2]);
+      dummy.scale.set(b.scale[0], b.scale[1], b.scale[2]);
+      dummy.rotation.set(b.rot[0], b.rot[1], b.rot[2]);
+      dummy.updateMatrix();
+      boulderMeshRef.current!.setMatrixAt(i, dummy.matrix);
+    });
+    boulderMeshRef.current.instanceMatrix.needsUpdate = true;
+  }, [boulders]);
+
   useFrame((_, delta) => {
     if (!isLanded) return;
     const keys = keysRef.current;
@@ -119,7 +148,8 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
 
       astronautQuat.current.slerp(getMoonSurfaceQuat(astroPos.x, astroPos.z, astronautRotY.current), delta * 12);
       if (forwardDir !== 0) {
-        astroPos.addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(astronautQuat.current), forwardDir * 5.2 * delta);
+        _moonFacing.copy(_moonFwdVec).applyQuaternion(astronautQuat.current);
+        astroPos.addScaledVector(_moonFacing, forwardDir * 5.2 * delta);
       }
 
       const surfaceY = getMoonSurfaceElevation(astroPos.x, astroPos.z);
@@ -159,11 +189,13 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
       else roverSpeed.current = THREE.MathUtils.lerp(roverSpeed.current, 0, delta * 1.8);
 
       roverQuat.current.slerp(getMoonSurfaceQuat(rovPos.x, rovPos.z, roverRotY.current), delta * 12);
-      rovPos.addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(roverQuat.current), roverSpeed.current * delta);
+      _moonFacing.copy(_moonFwdVec).applyQuaternion(roverQuat.current);
+      rovPos.addScaledVector(_moonFacing, roverSpeed.current * delta);
       rovPos.y = getMoonSurfaceElevation(rovPos.x, rovPos.z);
       roverWheelSpin.current += (roverSpeed.current / 0.42) * delta;
 
-      astroPos.copy(rovPos).add(new THREE.Vector3(0, 0.35, 0));
+      astroPos.copy(rovPos);
+      astroPos.y += 0.35;
       astronautRotY.current = roverRotY.current;
       astronautQuat.current.copy(roverQuat.current);
     }
@@ -193,12 +225,8 @@ export const MoonExploration: React.FC<MoonExplorationProps> = ({
         </mesh>
       </group>
 
-      {boulders.map((b, i) => (
-        <mesh key={i} position={b.pos} scale={b.scale} rotation={b.rot} castShadow receiveShadow>
-          <dodecahedronGeometry args={[1, 1]} />
-          <meshStandardMaterial color="#3f4247" roughness={0.96} metalness={0.05} />
-        </mesh>
-      ))}
+      {/* 2. Lunar Basalt Boulders (Instanced - 1 Draw Call) */}
+      <instancedMesh ref={boulderMeshRef} args={[boulderGeom, boulderMat, boulders.length]} castShadow receiveShadow />
 
       {rocketOnMoon && (
         <group position={[MOON_LANDING_SITE.x + 2.8, MOON_TOUCHDOWN_Y, MOON_LANDING_SITE.z + 1.2]} rotation={[0, -0.6, 0]}>
