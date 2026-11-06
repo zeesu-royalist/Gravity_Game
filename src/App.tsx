@@ -48,6 +48,7 @@ function UniversalThirdPersonCamera({
   const prevTarget = useRef(new THREE.Vector3(0, 13.7, 0));
   const prevMode = useRef(playerMode);
   const isUserDragging = useRef(false);
+  const lastDragEndTime = useRef(0);
   const { camera } = useThree();
 
   useEffect(() => {
@@ -56,56 +57,37 @@ function UniversalThirdPersonCamera({
       prevTarget.current.set(0, 13.7, 0);
       controlsRef.current?.target.set(0, 13.7, 0);
       controlsRef.current?.update();
+      lastDragEndTime.current = 0;
     }
   }, [resetCount, camera]);
-
-  useEffect(() => {
-    const ctrl = controlsRef.current;
-    if (!ctrl) return;
-    const onStart = () => { isUserDragging.current = true; };
-    const onEnd = () => { isUserDragging.current = false; };
-    ctrl.addEventListener('start', onStart);
-    ctrl.addEventListener('end', onEnd);
-    return () => {
-      ctrl.removeEventListener('start', onStart);
-      ctrl.removeEventListener('end', onEnd);
-    };
-  }, []);
 
   useFrame((_, delta) => {
     const ctrl = controlsRef.current;
     if (!ctrl) return;
 
-    // 1. Target calculation based on mode
+    // 1. Target calculation based on mode (Anchor point)
     const target = playerMode === 'ROCKET'
       ? new THREE.Vector3(rocketPos.x, Math.max(0.2, rocketPos.y) + 13.5, rocketPos.z)
       : (playerMode === 'ASTRONAUT' ? astronautPos : roverPos).clone().add(new THREE.Vector3(0, playerMode === 'ASTRONAUT' ? 1.2 : 1.3, 0));
 
-    // 2. Mode transition: automatically position camera behind entity at proper distance
+    // 2. Mode transition: position camera behind entity
     if (prevMode.current !== playerMode) {
       prevMode.current = playerMode;
       if (playerMode === 'ASTRONAUT') {
-        // Place camera ~10m behind the astronaut (matching user reference image)
         camera.position.set(target.x, target.y + 2.0, target.z - 10.0);
       } else if (playerMode === 'ROVER') {
-        // Place camera ~14m behind the rover / car for a clear driving view
         camera.position.set(target.x, target.y + 3.2, target.z - 14.0);
       } else {
-        // Rocket mode
-        if (isFlying) {
-          camera.position.set(target.x, target.y + 6.0, target.z + 36.0);
-        } else {
-          // Relative to rocket landing target (works on Earth, Moon, and Mars)
-          camera.position.set(target.x, target.y + 2.5, target.z + 48.0);
-        }
+        camera.position.set(target.x, target.y + 3.0, target.z + 46.0);
       }
       prevTarget.current.copy(target);
       ctrl.target.copy(target);
       ctrl.update();
+      lastDragEndTime.current = 0;
       return;
     }
 
-    // 3. Move camera along with target movement
+    // 3. Move camera along with target movement (Camera is firmly anchored to entity)
     const deltaPos = target.clone().sub(prevTarget.current);
     camera.position.add(deltaPos);
     ctrl.target.copy(target);
@@ -116,14 +98,12 @@ function UniversalThirdPersonCamera({
       const keys = keysRef?.current || {};
       const isTurnLeft = !!(keys['KeyA'] || keys['ArrowLeft']);
       const isTurnRight = !!(keys['KeyD'] || keys['ArrowRight']);
-      const isMoveForward = !!(keys['KeyW'] || keys['ArrowUp']);
 
       const horizMove = new THREE.Vector3(deltaPos.x, 0, deltaPos.z);
       const isEntityMoving = (playerMode === 'ROVER' || playerMode === 'ASTRONAUT') && horizMove.lengthSq() > 0.0001;
 
       if (isEntityMoving) {
         // Smooth cinematic chase camera for Astronaut & Rover (GTA style)
-        // Camera smoothly glides behind the movement trajectory with natural inertia
         const desiredBack = horizMove.normalize().negate();
         const offset = camera.position.clone().sub(target);
         const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
@@ -140,8 +120,8 @@ function UniversalThirdPersonCamera({
         offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed + steerAssist);
         camera.position.copy(target).add(offset);
       } else {
-        // Smooth pivot turning when stationary (or for Rocket)
-        const turnRate = playerMode === 'ASTRONAUT' ? 1.2 : playerMode === 'ROVER' ? 0.75 : (rocketPos.y > 3500 ? 1.6 : 1.2);
+        // Smooth pivot turning when steering Left/Right
+        const turnRate = playerMode === 'ASTRONAUT' ? 1.2 : playerMode === 'ROVER' ? 0.75 : (rocketPos.y > 3500 ? 1.5 : 1.2);
         let rotDelta = 0;
         if (isTurnLeft) rotDelta += turnRate * delta;
         if (isTurnRight) rotDelta -= turnRate * delta;
@@ -150,24 +130,34 @@ function UniversalThirdPersonCamera({
           const offset = camera.position.clone().sub(target);
           offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotDelta);
           camera.position.copy(target).add(offset);
-        } else if (isMoveForward || (playerMode === 'ROCKET' && isFlying)) {
-          // When moving forward or cruising (Rocket), smoothly align behind movement trajectory
-          if (horizMove.lengthSq() > 0.00005) {
-            const desiredBack = horizMove.normalize().negate();
-            const offset = camera.position.clone().sub(target);
-            const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
-            let angleDiff = Math.atan2(desiredBack.x, desiredBack.z) - Math.atan2(currentBack.x, currentBack.z);
-            if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            const alignSpeed = Math.min(1.0, delta * 3.5);
-            offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed);
-            camera.position.copy(target).add(offset);
+        } else {
+          // Smooth auto-return to third-person view after 2.5 seconds of inactivity
+          const now = performance.now();
+          const timeSinceDrag = now - lastDragEndTime.current;
+          if (timeSinceDrag > 2500) {
+            let desiredBack: THREE.Vector3 | null = null;
+            if (playerMode === 'ROCKET' && isFlying && horizMove.lengthSq() > 0.00005) {
+              desiredBack = horizMove.normalize().negate();
+            } else if (playerMode === 'ROCKET' && !isFlying) {
+              desiredBack = new THREE.Vector3(0, 0, 1);
+            }
+
+            if (desiredBack) {
+              const offset = camera.position.clone().sub(target);
+              const currentBack = new THREE.Vector3(offset.x, 0, offset.z).normalize();
+              let angleDiff = Math.atan2(desiredBack.x, desiredBack.z) - Math.atan2(currentBack.x, currentBack.z);
+              if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+              if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+              const alignSpeed = Math.min(1.0, delta * 1.8);
+              offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), angleDiff * alignSpeed);
+              camera.position.copy(target).add(offset);
+            }
           }
         }
       }
     }
 
-    // Ground clamp: prevents camera clipping into terrain or underground on Earth, Moon, Mars
+    // Ground clamp: prevents camera clipping below ground level on launchpad
     if (playerMode === 'ASTRONAUT') {
       const minCamY = astronautPos.y + 0.35;
       if (camera.position.y < minCamY) camera.position.y = minCamY;
@@ -186,14 +176,23 @@ function UniversalThirdPersonCamera({
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      target={[0, 13.7, 0]}
       enablePan={false}
-      minDistance={playerMode === 'ASTRONAUT' ? 2.5 : playerMode === 'ROVER' ? 5.0 : 7}
-      maxDistance={playerMode === 'ASTRONAUT' ? 24 : playerMode === 'ROVER' ? 38 : 75}
-      maxPolarAngle={playerMode === 'ROCKET' && isFlying ? Math.PI : Math.PI / 2 + 0.04}
-      dampingFactor={0.08}
-      rotateSpeed={0.85}
+      enableDamping={true}
+      dampingFactor={0.06}
+      minDistance={playerMode === 'ASTRONAUT' ? 2.5 : playerMode === 'ROVER' ? 4.5 : 8.0}
+      maxDistance={playerMode === 'ASTRONAUT' ? 24 : playerMode === 'ROVER' ? 38 : 120}
+      minPolarAngle={0.08}
+      maxPolarAngle={playerMode === 'ROCKET' && isFlying ? Math.PI - 0.05 : Math.PI * 0.72}
+      rotateSpeed={0.8}
       zoomSpeed={1.0}
+      onStart={() => {
+        isUserDragging.current = true;
+        lastDragEndTime.current = performance.now();
+      }}
+      onEnd={() => {
+        isUserDragging.current = false;
+        lastDragEndTime.current = performance.now();
+      }}
     />
   );
 }
